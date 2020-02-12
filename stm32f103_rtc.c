@@ -1,43 +1,77 @@
-/*--------------------------------------------------------------------------  */
-/*  RTC controls for STM32                                                    */
-/*  Copyright (c) 2009, Martin Thomas 4/2009, BSD-license                     */
-/*  partly based on code from STMircoelectronics, Peter Dannegger, "LaLaDumm" */
-/*--------------------------------------------------------------------------  */
+/*
+ * This file is provided under a MIT license.  When using or
+ * redistributing this file, you may do so under either license.
+ *
+ * MIT License
+ *
+ * Copyright (c) 2020 Pavel Nadein
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * STM32F103 open source driver
+ *
+ * Contact Information:
+ * Pavel Nadein <pavelnadein@gmail.com>
+ */
+#include "stm32f103_rtc.h"
 
-#include "rtc.h"
+#include "stm32f10x_rtc.h"
+#include "stm32f10x_pwr.h"
+#include "stm32f10x_rcc.h"
+#include "stm32f10x_bkp.h"
 
 #define FIRSTYEAR   2000		// start year
 #define FIRSTDAY    6			// 0 = Sunday
 
-static const uint8_t DaysInMonth[] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const uint8_t DaysInMonth[] =
+	{ 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
-/*******************************************************************************
-* Function Name  : isDST
-* Description    : checks if given time is in Daylight Saving time-span.
-* Input          : time-struct, must be fully populated including weekday
-* Output         : none
-* Return         : false: no DST ("winter"), true: in DST ("summer")
-*  DST according to German standard
-*  Based on code from Peter Dannegger found in the microcontroller.net forum.
-*******************************************************************************/
-static uint8_t isDST( const RTC_t *t )
+
+static uint8_t isDST(struct rtc_t *t)
 {
-	uint8_t wday, month;		// locals for faster access
+	uint8_t wday, month = t->month;
 
-	month = t->month;
-
-	if( month < 3 || month > 10 ) {		// month 1, 2, 11, 12
-		return 0;					// -> Winter
+	if( month < 3 || month > 10 ) { /* month 1, 2, 11, 12 */
+		return 0; // -> Winter
 	}
 
-	wday  = t->wday;
+	wday = t->wday;
 
-	if( t->mday - wday >= 25 && (wday || t->hour >= 2) ) { // after last Sunday 2:00
-		if( month == 10 ) {				// October -> Winter
+	if (t->mday - wday >= 25 && (wday || t->hour >= 2) ) {
+		// after last Sunday 2:00
+		if( month == 10 ) {	// October -> Winter
 			return 0;
 		}
-	} else {							// before last Sunday 2:00
-		if( month == 3 ) {				// March -> Winter
+	} else {	// before last Sunday 2:00
+		if( month == 3 ) {	// March -> Winter
 			return 0;
 		}
 	}
@@ -54,7 +88,7 @@ static uint8_t isDST( const RTC_t *t )
 *  DST according to German standard
 *  Based on code from Peter Dannegger found in the microcontroller.net forum.
 *******************************************************************************/
-static uint8_t adjustDST( RTC_t *t )
+static uint8_t adjustDST(struct rtc_t *t)
 {
 	uint8_t hour, day, wday, month;			// locals for faster access
 
@@ -98,11 +132,11 @@ static uint8_t adjustDST( RTC_t *t )
 * Return         : none
 *  Based on code from Peter Dannegger found in the microcontroller.net forum.
 *******************************************************************************/
-static void counter_to_struct( uint32_t sec, RTC_t *t )
+static void counter_to_struct(uint32_t sec, struct rtc_t *t)
 {
-	u16 day;
+	uint16_t day;
 	uint8_t year;
-	u16 dayofyear;
+	uint16_t dayofyear;
 	uint8_t leap400;
 	uint8_t month;
 
@@ -111,7 +145,7 @@ static void counter_to_struct( uint32_t sec, RTC_t *t )
 	t->min = sec % 60;
 	sec /= 60;
 	t->hour = sec % 24;
-	day = (u16)(sec / 24);
+	day = (uint16_t)(sec / 24);
 
 	t->wday = (day + FIRSTDAY) % 7;		// weekday
 
@@ -156,11 +190,11 @@ static void counter_to_struct( uint32_t sec, RTC_t *t )
 * Return         : counter-value (unit seconds, 0 -> 1.1.2000 00:00:00),
 *  Based on code from "LalaDumm" found in the microcontroller.net forum.
 *******************************************************************************/
-static uint32_t struct_to_counter( const RTC_t *t )
+static uint32_t struct_to_counter( const struct rtc_t *t )
 {
 	uint8_t i;
 	uint32_t result = 0;
-	u16 idx, year;
+	uint16_t idx, year;
 
 	year = t->year;
 
@@ -184,7 +218,7 @@ static uint32_t struct_to_counter( const RTC_t *t )
 	}
 
 	/* Leap year? adjust February */
-	if (year%400 == 0 || (year%4 == 0 && year%100 !=0)) {
+	if (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)) {
 		;
 	} else {
 		if (t->month > 1) {
@@ -210,7 +244,7 @@ static uint32_t struct_to_counter( const RTC_t *t )
 * Return         : always true/not used
 *******************************************************************************/
 
-void rtc_gettime (RTC_t *rtc)
+void rtc_gettime (struct rtc_t *rtc)
 {
 	uint32_t t;
 
@@ -244,11 +278,11 @@ static void my_RTC_SetCounter(uint32_t cnt)
 * Output         : None
 * Return         : not used
 *******************************************************************************/
-void rtc_settime (const RTC_t *rtc)
+void rtc_settime (const struct rtc_t *rtc)
 {
 	uint32_t cnt;
-	volatile u16 i;
-	RTC_t ts;
+	volatile uint16_t i;
+	struct rtc_t ts;
 
 	cnt = struct_to_counter( rtc ); // non-DST counter-value
 	counter_to_struct( cnt, &ts );  // normalize struct (for weekday)
@@ -256,7 +290,7 @@ void rtc_settime (const RTC_t *rtc)
 		cnt -= 60*60; // Subtract one hour
 	}
 	PWR_BackupAccessCmd(ENABLE);
-	my_RTC_SetCounter( cnt );
+	my_RTC_SetCounter(cnt);
 	PWR_BackupAccessCmd(DISABLE);
 }
 
@@ -271,7 +305,7 @@ void rtc_settime (const RTC_t *rtc)
 *******************************************************************************/
 int rtc_init(void)
 {
-	volatile u16 i;
+	volatile uint16_t i;
 
 	/* Enable PWR and BKP clocks */
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
@@ -334,6 +368,3 @@ int rtc_init(void)
 
 	return 0;
 }
-
-
-
