@@ -182,7 +182,7 @@ int timer_set_period(uint8_t tim, uint16_t period)
 	return 0;
 }
 
-int timer_pwm_enable(uint8_t tim, enum pwm_ch_t ch, u16 duty)
+int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty)
 {
 	TIM_TypeDef *base = get_tim_base(tim);
 
@@ -190,22 +190,22 @@ int timer_pwm_enable(uint8_t tim, enum pwm_ch_t ch, u16 duty)
 		return -EINVAL;
 
 	switch (ch) {
-	case PWM_CH1:
+	case 1:
 		base->CCMR1 = (7 << 4) | TIM_CCMR1_OC1PE;
 		base->CCER = TIM_CCER_CC1E | TIM_CCER_CC1P;
 		base->CCR1 = duty;
 		break;
-	case PWM_CH2:
+	case 2:
 		base->CCMR1 = (7 << 4) | TIM_CCMR1_OC2PE;
 		base->CCER = TIM_CCER_CC2E | TIM_CCER_CC2P;
 		base->CCR2 = duty;
 		break;
-	case PWM_CH3:
+	case 3:
 		base->CCMR2 = (7 << 4) | TIM_CCMR2_OC3PE;
 		base->CCER = TIM_CCER_CC3E | TIM_CCER_CC3P;
 		base->CCR3 = duty;
 		break;
-	case PWM_CH4:
+	case 4:
 		base->CCMR2 = (7 << 4) | TIM_CCMR2_OC4PE;
 		base->CCER = TIM_CCER_CC4E | TIM_CCER_CC4P;
 		base->CCR4 = duty;
@@ -218,6 +218,35 @@ int timer_pwm_enable(uint8_t tim, enum pwm_ch_t ch, u16 duty)
 	base->BDTR = TIM_BDTR_MOE;
 	base->EGR = TIM_EGR_UG;
 	base->CR1 = TIM_CR1_CEN;
+
+	return 0;
+}
+
+int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty)
+{
+	TIM_TypeDef *base = get_tim_base(tim);
+
+	if (!base)
+		return -EINVAL;
+
+	switch (ch) {
+	case 1:
+		base->CCR1 = duty;
+		break;
+	case 2:
+		base->CCR2 = duty;
+		break;
+	case 3:
+		base->CCR3 = duty;
+		break;
+	case 4:
+		base->CCR4 = duty;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	base->EGR = TIM_EGR_UG;
 
 	return 0;
 }

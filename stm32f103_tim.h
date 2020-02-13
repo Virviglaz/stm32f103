@@ -50,17 +50,11 @@
 #include <stdbool.h>
 #include <errno.h>
 
-enum pwm_ch_t {
-	PWM_CH1,
-	PWM_CH2,
-	PWM_CH3,
-	PWM_CH4,
-};
-
 int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
 int timer_enable(uint8_t tim, bool state);
 int timer_set_period(uint8_t tim, uint16_t period);
-int timer_pwm_enable(uint8_t tim, enum pwm_ch_t ch, u16 duty);
+int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
+int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
 int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim));
 int set_pwm_duty(uint8_t tim, uint16_t period);
 
