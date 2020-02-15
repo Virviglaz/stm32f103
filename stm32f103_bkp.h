@@ -41,29 +41,22 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
-#ifndef __STM32F103_TIM_H__
-#define __STM32F103_TIM_H__
+
+#ifndef __STM32F103_BKP_H__
+#define __STM32F103_BKP_H__
 
 #ifdef __cplusplus
  extern "C" {
 #endif
 
-#include <stm32f10x.h>
+#include "stm32f10x.h"
 #include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
 
-int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
-int timer_enable(uint8_t tim, bool state);
-int timer_set_period(uint8_t tim, uint16_t period);
-int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
-int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
-int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim));
-int set_pwm_duty(uint8_t tim, uint16_t period);
+void bkp_write(uint8_t reg_num, uint16_t value);
+uint16_t bkp_read(uint8_t reg_num);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __STM32F103_TIM_H__ */
+#endif /* __STM32F103_BKP_H__ */

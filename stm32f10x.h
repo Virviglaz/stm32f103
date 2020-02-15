@@ -53,7 +53,9 @@
 #ifdef __cplusplus
  extern "C" {
 #endif 
-  
+
+#define ARRAY_SIZE(a)		(sizeof(a) / sizeof(*a))
+
 /** @addtogroup Library_configuration_section
   * @{
   */

@@ -41,29 +41,40 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
-#ifndef __STM32F103_TIM_H__
-#define __STM32F103_TIM_H__
+
+#ifndef __STM32F103_RCC_H__
+#define __STM32F103_RCC_H__
 
 #ifdef __cplusplus
  extern "C" {
 #endif
 
-#include <stm32f10x.h>
+#include "stm32f10x.h"
 #include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
 
-int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
-int timer_enable(uint8_t tim, bool state);
-int timer_set_period(uint8_t tim, uint16_t period);
-int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
-int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
-int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim));
-int set_pwm_duty(uint8_t tim, uint16_t period);
+enum clock_t {
+	NO_CLOCK,
+	HSI_CLOCK, /* High speed internal clock */
+	HSE_CLOCK, /* High speed external clock */
+	HSE_CLOCK_DIV2, /* High speed external divided by 2 */
+	HSE_CLOCK_DIV128, /* High speed external divided by 128 */
+	LSI_CLOCK, /* Low speed internal clock */
+	LSE_CLOCK, /* Low speed external clock */
+	PLL_CLOCK, /* PLL clock source */
+	INV_CLOCK, /* Invalid value */
+};
+
+enum clock_t hsi_enable(void);
+enum clock_t hse_enable(void);
+enum clock_t get_system_clock(void);
+enum clock_t set_system_clock(enum clock_t clk);
+enum clock_t pll_enable(uint8_t pll, enum clock_t source);
+enum clock_t lse_enable(void);
+enum clock_t get_rtc_clock(void);
+enum clock_t set_rtc_clock(enum clock_t source);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __STM32F103_TIM_H__ */
+#endif /* __STM32F103_RCC_H__ */

@@ -41,29 +41,76 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
-#ifndef __STM32F103_TIM_H__
-#define __STM32F103_TIM_H__
 
-#ifdef __cplusplus
- extern "C" {
-#endif
+#include "stm32f103_bkp.h"
 
-#include <stm32f10x.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
+static uint16_t *get_dr_reg(uint8_t n)
+{
+	static const uint16_t *dr_regs[] = {
+		(void *)&BKP->DR1,
+		(void *)&BKP->DR2,
+		(void *)&BKP->DR3,
+		(void *)&BKP->DR4,
+		(void *)&BKP->DR5,
+		(void *)&BKP->DR6,
+		(void *)&BKP->DR7,
+		(void *)&BKP->DR8,
+		(void *)&BKP->DR9,
+		(void *)&BKP->DR10,
+		(void *)&BKP->DR11,
+		(void *)&BKP->DR12,
+		(void *)&BKP->DR13,
+		(void *)&BKP->DR14,
+		(void *)&BKP->DR15,
+		(void *)&BKP->DR16,
+		(void *)&BKP->DR17,
+		(void *)&BKP->DR18,
+		(void *)&BKP->DR19,
+		(void *)&BKP->DR20,
+		(void *)&BKP->DR21,
+		(void *)&BKP->DR22,
+		(void *)&BKP->DR23,
+		(void *)&BKP->DR24,
+		(void *)&BKP->DR25,
+		(void *)&BKP->DR26,
+		(void *)&BKP->DR27,
+		(void *)&BKP->DR28,
+		(void *)&BKP->DR29,
+		(void *)&BKP->DR30,
+		(void *)&BKP->DR31,
+		(void *)&BKP->DR32,
+		(void *)&BKP->DR33,
+		(void *)&BKP->DR34,
+		(void *)&BKP->DR35,
+		(void *)&BKP->DR36,
+		(void *)&BKP->DR37,
+		(void *)&BKP->DR38,
+		(void *)&BKP->DR39,
+		(void *)&BKP->DR40,
+		(void *)&BKP->DR41,
+		(void *)&BKP->DR42,
+	};
 
-int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
-int timer_enable(uint8_t tim, bool state);
-int timer_set_period(uint8_t tim, uint16_t period);
-int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
-int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
-int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim));
-int set_pwm_duty(uint8_t tim, uint16_t period);
+	RCC->APB1ENR |= RCC_APB1ENR_BKPEN | RCC_APB1ENR_PWREN;
 
-#ifdef __cplusplus
+	return n < ARRAY_SIZE(dr_regs) ? (uint16_t *)dr_regs[n] : 0;
 }
-#endif
 
-#endif /* __STM32F103_TIM_H__ */
+void bkp_write(uint8_t reg_num, uint16_t value)
+{
+	uint16_t *reg = get_dr_reg(reg_num - 1);
+
+	PWR->CR |= PWR_CR_DBP;
+
+	if (reg)
+		*reg = value;
+
+	PWR->CR &= ~PWR_CR_DBP;
+}
+
+uint16_t bkp_read(uint8_t reg_num)
+{
+	uint16_t *reg = get_dr_reg(reg_num - 1);
+
+	return reg ? *reg : 0;
+}

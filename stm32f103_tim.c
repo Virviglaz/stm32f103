@@ -50,27 +50,11 @@ static struct {
 
 static TIM_TypeDef *get_tim_base(uint8_t tim)
 {
-	switch (tim) {
-	case 1:		return TIM1;
-	case 2:		return TIM2;
-	case 3:		return TIM3;
-	case 4:		return TIM4;
-	case 5:		return TIM5;
-	case 6:		return TIM6;
-	case 7:		return TIM7;
-	case 8:		return TIM8;
-	case 9:		return TIM9;
-	case 10:	return TIM10;
-	case 11:	return TIM11;
-	case 12:	return TIM12;
-	case 13:	return TIM13;
-	case 14:	return TIM14;
-	case 15:	return TIM15;
-	case 16:	return TIM16;
-	case 17:	return TIM17;
-	}
+	static const TIM_TypeDef *tims[] = { 0,
+		TIM1, TIM2, TIM3, TIM4, TIM5, TIM6, TIM7, TIM8, TIM9, TIM10,
+		TIM11, TIM12, TIM13, TIM14, TIM15, TIM16, TIM17 };
 
-	return 0;
+	return tim >= (sizeof(tims) / sizeof(void *)) ? 0 : (void *)tims[tim];
 }
 
 int timer_init(uint8_t tim, uint16_t prc, uint16_t period)

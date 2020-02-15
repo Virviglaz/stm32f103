@@ -45,6 +45,10 @@
 #ifndef __STM32F103_GPIO_H__
 #define __STM32F103_GPIO_H__
 
+#ifdef __cplusplus
+ extern "C" {
+#endif
+
 #include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -90,5 +94,9 @@ static inline uint16_t gpio_read(GPIO_TypeDef *gpio, uint16_t pinmask)
 {
 	return gpio->IDR & pinmask;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __STM32F103_GPIO_H__ */

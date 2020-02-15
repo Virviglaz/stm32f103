@@ -46,9 +46,18 @@
 #define _RTC_H_
 
 #include <stdint.h>
+#include "stm32f10x.h"
+#include "stm32f103_rcc.h"
+
+#ifdef __cplusplus
+ extern "C" {
+#endif
+
+#define LSE_PRESCALER			32768 /* External crystal 32768 */
+#define LSI_PRESCALER			40000 /* Internal clock 40kHz */
 
 struct rtc_t {
-	u16 year;	/* 1..4095 */
+	uint16_t year;	/* 1..4095 */
 	uint8_t  month;	/* 1..12 */
 	uint8_t  mday;	/* 1.. 31 */
 	uint8_t  wday;	/* 0..6, Sunday = 0*/
@@ -56,8 +65,14 @@ struct rtc_t {
 	uint8_t  min;	/* 0..59 */
 	uint8_t  sec;	/* 0..59 */
 	uint8_t  dst;	/* 0 Winter, !=0 Summer */
-	u16 TimeLogSec;
-	volatile u8 SecFlag;
 };
+
+#ifdef __cplusplus
+}
+#endif
+
+void rtc_gettime(struct rtc_t *rtc);
+void rtc_settime(const struct rtc_t *rtc);
+int rtc_init(enum clock_t source, uint32_t prc);
 
 #endif /* _RTC_H_ */
