@@ -206,15 +206,16 @@ static uint32_t struct_to_counter(const struct rtc_t *t)
 	return result;
 }
 
-static uint32_t get_cnt(void)
-{
-	return RTC->CNTL | (RTC->CNTH << 8);
-}
-
 static inline void wait_for_sync(void)
 {
 	RTC->CRL &= ~RTC_CRL_RSF;
 	while (!(RTC->CRL & RTC_CRL_RSF));
+}
+
+static uint32_t get_cnt(void)
+{
+	wait_for_sync();
+	return (RTC->CNTH << 16) | RTC->CNTL;
 }
 
 static inline void wait_for_write_finished(void)
@@ -277,7 +278,7 @@ void rtc_settime(const struct rtc_t *rtc)
 
 int rtc_init(enum clock_t source, uint32_t prc)
 {
-	if (!(RCC->BDCR & RCC_BDCR_RTCEN)) {
+	if (!(RCC->BDCR & RCC_BDCR_RTCEN) || get_rtc_clock() != source) {
 		const struct rtc_t default_time = {
 			.year = 2020,
 			.month = 1,
