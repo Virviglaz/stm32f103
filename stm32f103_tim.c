@@ -321,7 +321,6 @@ int set_pwm_duty(uint8_t tim, uint16_t period)
 }
 
 /* INTERRUPT VECTORS */
-
 void TIM1_UP_IRQHandler(void)
 {
 	tim_isr[0].handler(1);

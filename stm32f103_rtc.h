@@ -74,5 +74,6 @@ struct rtc_t {
 void rtc_gettime(struct rtc_t *rtc);
 void rtc_settime(const struct rtc_t *rtc);
 int rtc_init(enum clock_t source, uint32_t prc);
+void rtc_sec_interrupt(void (*handler)(void));
 
 #endif /* _RTC_H_ */

@@ -305,3 +305,20 @@ int rtc_init(enum clock_t source, uint32_t prc)
 	clock_source = source;
 	return 0;
 }
+
+static void (*sec_irq_handler)(void);
+
+void rtc_sec_interrupt(void (*handler)(void))
+{
+	sec_irq_handler = handler;
+
+	RTC->CRH |= RTC_CRH_SECIE;
+
+	NVIC_EnableIRQ(RTC_IRQn);
+}
+
+void RTC_IRQHandler(void)
+{
+	sec_irq_handler();
+	RTC->CRL = 0;
+}
