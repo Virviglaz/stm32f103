@@ -78,7 +78,7 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 	case 4:
 		RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
 		break;
-#endif
+#endif /* !STM32F10X_LD !STM32F10X_LD_VL */
 #if defined (STM32F10X_HD) || defined  (STM32F10X_CL)
 	case 5:
 		RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;
@@ -89,12 +89,12 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 	case 7:
 		RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
 		break;
-#endif
+#endif /* STM32F10X_HD STM32F10X_CL */
 #if defined (STM32F10X_HD) || defined (STM32F10X_XL)
 	case 8:
 		RCC->APB2ENR |= RCC_APB2ENR_TIM8EN;
 		break;
-#endif
+#endif /* STM32F10X_HD STM32F10X_XL */
 #ifdef STM32F10X_XL
 	case 9:
 		RCC->APB2ENR |= RCC_APB2ENR_TIM9EN;
@@ -105,7 +105,7 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 	case 11:
 		RCC->APB2ENR |= RCC_APB2ENR_TIM11EN;
 		break;
-#endif
+#endif /* STM32F10X_XL */
 #ifdef STM32F10X_HD_VL
 	case 12:
 		RCC->APB1ENR |= RCC_APB1ENR_TIM12EN;
@@ -116,7 +116,7 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 	case 14:
 		RCC->APB1ENR |= RCC_APB1ENR_TIM14EN;
 		break;
-#endif
+#endif /* STM32F10X_HD_VL */
 #if defined (STM32F10X_LD_VL) || defined (STM32F10X_MD_VL) || \
 	defined (STM32F10X_HD_VL)
 	case 15:
@@ -128,7 +128,7 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 	case 17:
 		RCC->APB2ENR |= RCC_APB2ENR_TIM17EN;
 		break;
-#endif
+#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 	default:
 		return -EINVAL;
 	};
@@ -248,8 +248,11 @@ int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim))
 
 	switch (tim) {
 	case 1:
+#if defined(STM32F10X_LD) || defined(STM32F10X_MD) || defined(STM32F10X_HD) || \
+	defined(STM32F10X_CL)
 		NVIC_EnableIRQ(TIM1_UP_IRQn);
 		break;
+#endif /* STM32F10X_LD STM32F10X_MD STM32F10X_HD STM32F10X_CL */
 	case 2:
 		NVIC_EnableIRQ(TIM2_IRQn);
 		break;
@@ -259,12 +262,17 @@ int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim))
 	case 4:
 		NVIC_EnableIRQ(TIM4_IRQn);
 		break;
+#if defined(STM32F10X_HD) || defined(STM32F10X_HD_VL) || defined(STM32F10X_XL) \
+	|| defined(STM32F10X_CL)
 	case 5:
 		NVIC_EnableIRQ(TIM5_IRQn);
 		break;
+#endif /* STM32F10X_HD STM32F10X_HD_VL STM32F10X_XL STM32F10X_CL */
+#if defined(STM32F10X_HD) || defined(STM32F10X_XL) || defined(STM32F10X_CL)
 	case 6:
 		NVIC_EnableIRQ(TIM6_IRQn);
 		break;
+#endif /* STM32F10X_HD STM32F10X_XL STM32F10X_CL */
 	case 7:
 		NVIC_EnableIRQ(TIM7_IRQn);
 		break;
@@ -364,7 +372,6 @@ void TIM7_IRQHandler(void)
 }
 	
 #ifdef STM32F10X_XL
-
 void TIM8_IRQHandler(void)
 {
 	tim_isr[7].handler(8);
@@ -426,4 +433,4 @@ void TIM17_IRQHandler(void)
 	TIM17->SR = 0;
 }
 
-#endif
+#endif /* STM32F10X_XL */

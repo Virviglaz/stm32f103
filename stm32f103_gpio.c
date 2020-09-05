@@ -56,10 +56,12 @@ static void rcc_enable(GPIO_TypeDef *gpio)
 		RCC->APB2ENR |= RCC_APB2ENR_IOPDEN;
 	else if (gpio == GPIOE)
 		RCC->APB2ENR |= RCC_APB2ENR_IOPEEN;
+#if defined (STM32F10X_HD) || defined (STM32F10X_XL)
 	else if (gpio == GPIOF)
 		RCC->APB2ENR |= RCC_APB2ENR_IOPFEN;
 	else if (gpio == GPIOG)
 		RCC->APB2ENR |= RCC_APB2ENR_IOPGEN;
+#endif /* STM32F10X_HD STM32F10X_XL */
 }
 
 static void output_init(GPIO_TypeDef *gpio, uint8_t pin,
