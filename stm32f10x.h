@@ -55,6 +55,7 @@
 #endif 
 
 #define ARRAY_SIZE(a)		(sizeof(a) / sizeof(*a))
+#define BIT(a)			(1 << a)
 
 /** @addtogroup Library_configuration_section
   * @{
