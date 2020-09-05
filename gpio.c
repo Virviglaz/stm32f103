@@ -36,13 +36,13 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * STM32F103 open source driver
+ * STM32F10x open source driver
  *
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-#include "stm32f103_gpio.h"
+#include "gpio.h"
 
 static void rcc_enable(GPIO_TypeDef *gpio)
 {
@@ -123,7 +123,7 @@ void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 	if (mode >= PUSHPULL_ALT_OUTPUT)
 		RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
 
-	for (i = 0; i != 15; i++)
+	for (i = 0; i != 16; i++)
 		if (pinmask & (1 << i))
 			output_init(gpio, i, mode, freq);
 }
@@ -135,7 +135,7 @@ void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 
 	rcc_enable(gpio);
 
-	for (i = 0; i != 15; i++)
+	for (i = 0; i != 16; i++)
 		if (pinmask & (1 << i))
 			input_init(gpio, i, mode);
 }

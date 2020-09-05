@@ -36,21 +36,27 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * STM32F103 open source driver
+ * STM32F10x open source driver
  *
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-#include "stm32f103_crc.h"
+#ifndef __BKP_H__
+#define __BKP_H__
 
-uint32_t crc32(uint8_t *buf, uint32_t size)
-{
-	RCC->AHBENR |= RCC_AHBENR_CRCEN;
-	CRC->CR = CRC_CR_RESET;
+#ifdef __cplusplus
+ extern "C" {
+#endif
 
-	while (size--)
-		CRC->DR = *buf++;
+#include "stm32f10x.h"
+#include <stdint.h>
 
-	return CRC->DR;
+void bkp_write(uint8_t reg_num, uint16_t value);
+uint16_t bkp_read(uint8_t reg_num);
+
+#ifdef __cplusplus
 }
+#endif
+
+#endif /* __BKP_H__ */

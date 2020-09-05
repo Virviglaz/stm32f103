@@ -36,44 +36,67 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * STM32F103 open source driver
+ * STM32F10x open source driver
  *
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-#ifndef _RTC_H_
-#define _RTC_H_
-
-#include <stdint.h>
-#include "stm32f10x.h"
-#include "stm32f103_rcc.h"
+#ifndef __GPIO_H__
+#define __GPIO_H__
 
 #ifdef __cplusplus
  extern "C" {
 #endif
 
-#define LSE_PRESCALER			32768 /* External crystal 32768 */
-#define LSI_PRESCALER			40000 /* Internal clock 40kHz */
+#include <stm32f10x.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <errno.h>
 
-struct rtc_t {
-	uint16_t year;	/* 1..4095 */
-	uint8_t  month;	/* 1..12 */
-	uint8_t  mday;	/* 1.. 31 */
-	uint8_t  wday;	/* 0..6, Sunday = 0*/
-	uint8_t  hour;	/* 0..23 */
-	uint8_t  min;	/* 0..59 */
-	uint8_t  sec;	/* 0..59 */
-	uint8_t  dst;	/* 0 Winter, !=0 Summer */
+enum input_mode_t {
+	ANALOG_INPUT,
+	DIGITAL_INPUT,
+	PULL_UP_INPUT,
+	PULL_DOWN_INPUT,
 };
+
+enum output_mode_t {
+	PUSHPULL_OUTPUT,
+	OPENDRAIN_OUTPUT,
+	PUSHPULL_ALT_OUTPUT,
+	OPENDRAIN_ALT_OUTPUT,
+};
+
+enum freq_gpio_t {
+	GPIO_FREQ_2MHz,
+	GPIO_FREQ_10MHz,
+	GPIO_FREQ_50MHz,
+};
+
+void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
+	enum output_mode_t mode, enum freq_gpio_t freq);
+void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
+	enum input_mode_t mode);
+void gpio_set_state(GPIO_TypeDef *gpio, uint16_t pinmask, bool state);
+
+static inline void gpio_set(GPIO_TypeDef *gpio, uint16_t pinmask)
+{
+	gpio->BSRR = pinmask;
+}
+
+static inline void gpio_reset(GPIO_TypeDef *gpio, uint16_t pinmask)
+{
+	gpio->BRR = pinmask;
+}
+
+static inline uint16_t gpio_read(GPIO_TypeDef *gpio, uint16_t pinmask)
+{
+	return gpio->IDR & pinmask;
+}
 
 #ifdef __cplusplus
 }
 #endif
 
-void rtc_gettime(struct rtc_t *rtc);
-void rtc_settime(const struct rtc_t *rtc);
-int rtc_init(enum clock_t source, uint32_t prc);
-void rtc_sec_interrupt(void (*handler)(void));
-
-#endif /* _RTC_H_ */
+#endif /* __GPIO_H__ */

@@ -36,14 +36,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * STM32F103 open source driver
+ * STM32F10x open source driver
  *
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
  
-#ifndef __STM32F103_TIM_H__
-#define __STM32F103_TIM_H__
+#ifndef __TIM_H__
+#define __TIM_H__
 
 #ifdef __cplusplus
  extern "C" {
@@ -66,4 +66,4 @@ int set_pwm_duty(uint8_t tim, uint16_t period);
 }
 #endif
 
-#endif /* __STM32F103_TIM_H__ */
+#endif /* __TIM_H__ */

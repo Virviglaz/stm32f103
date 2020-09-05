@@ -36,14 +36,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * STM32F103 open source driver
+ * STM32F10x open source driver
  *
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-#ifndef __STM32F103_BKP_H__
-#define __STM32F103_BKP_H__
+#ifndef __RCC_H__
+#define __RCC_H__
 
 #ifdef __cplusplus
  extern "C" {
@@ -52,11 +52,29 @@
 #include "stm32f10x.h"
 #include <stdint.h>
 
-void bkp_write(uint8_t reg_num, uint16_t value);
-uint16_t bkp_read(uint8_t reg_num);
+enum clock_t {
+	NO_CLOCK,
+	HSI_CLOCK, /* High speed internal clock */
+	HSE_CLOCK, /* High speed external clock */
+	HSE_CLOCK_DIV2, /* High speed external divided by 2 */
+	HSE_CLOCK_DIV128, /* High speed external divided by 128 */
+	LSI_CLOCK, /* Low speed internal clock */
+	LSE_CLOCK, /* Low speed external clock */
+	PLL_CLOCK, /* PLL clock source */
+	INV_CLOCK, /* Invalid value */
+};
+
+enum clock_t hsi_enable(void);
+enum clock_t hse_enable(void);
+enum clock_t get_system_clock(void);
+enum clock_t set_system_clock(enum clock_t clk);
+enum clock_t pll_enable(uint8_t pll, enum clock_t source);
+enum clock_t lse_enable(void);
+enum clock_t get_rtc_clock(void);
+enum clock_t set_rtc_clock(enum clock_t source);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __STM32F103_BKP_H__ */
+#endif /* __RCC_H__ */
