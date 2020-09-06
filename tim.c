@@ -272,10 +272,10 @@ int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim))
 	case 6:
 		NVIC_EnableIRQ(TIM6_IRQn);
 		break;
-#endif /* STM32F10X_HD STM32F10X_XL STM32F10X_CL */
 	case 7:
 		NVIC_EnableIRQ(TIM7_IRQn);
 		break;
+#endif /* STM32F10X_HD STM32F10X_XL STM32F10X_CL */
 #ifdef STM32F10X_XL
 	case 8:
 		NVIC_EnableIRQ(TIM8_UP_TIM13_IRQn);
