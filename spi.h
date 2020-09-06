@@ -77,7 +77,7 @@ enum spi_clockmode {
 void spi_init(SPI_TypeDef *SPIx,
 	enum spi_dir dir,
 	enum spi_clockdiv div,
-	enum spi_clockmode clkdiv);
+	enum spi_clockmode mode);
 
 uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value);
 

@@ -106,6 +106,11 @@ uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
 void spi_init(SPI_TypeDef *SPIx, enum spi_dir dir,
 	enum spi_clockdiv div, enum spi_clockmode mode)
 {
+	if (SPIx == SPI1)
+		RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+	if (SPIx == SPI2)
+		RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+
 	SPIx->CR2 = 0;
 	SPIx->CR1 = (uint16_t)dir | (uint16_t)div | (uint16_t)mode \
 		| SPI_CR1_SSI | SPI_CR1_SSM | SPI_CR1_MSTR | SPI_CR1_SPE;
