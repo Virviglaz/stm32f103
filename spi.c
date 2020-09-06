@@ -43,6 +43,7 @@
  */
 
 #include "spi.h"
+#include "gpio.h"
 
 inline static void spi_select(GPIO_TypeDef *GPIOx, uint16_t PINx)
 {	
@@ -62,12 +63,13 @@ uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value)
 	while (!(SPIx->SR & SPI_SR_TXE));
 
 	/* Send byte through the SPI peripheral */
-	*((__IO uint8_t *)&SPIx->DR) = value;
+	SPIx->DR = value;
 
 	/* Wait to receive a byte */
 	while (!(SPIx->SR & SPI_SR_RXNE));
+	//while (SPIx->SR & SPI_SR_BSY);
 
-	return *((__IO uint8_t *)&SPIx->DR);
+	return SPIx->DR;
 }
 
 uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
@@ -106,10 +108,22 @@ uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
 void spi_init(SPI_TypeDef *SPIx, enum spi_dir dir,
 	enum spi_clockdiv div, enum spi_clockmode mode)
 {
-	if (SPIx == SPI1)
+	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
+
+	if (SPIx == SPI1) {
 		RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-	if (SPIx == SPI2)
+		gpio_output_init(PA5, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		//gpio_input_init(PA6, PULL_UP_INPUT);
+		gpio_output_init(PA6, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PA7, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+	} else if (SPIx == SPI2) {
 		RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+		gpio_output_init(PB13, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PB14, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		//gpio_input_init(PB4, PULL_UP_INPUT);
+		gpio_output_init(PB15, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+	} else
+		return;
 
 	SPIx->CR2 = 0;
 	SPIx->CR1 = (uint16_t)dir | (uint16_t)div | (uint16_t)mode \
