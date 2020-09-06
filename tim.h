@@ -59,7 +59,8 @@ int timer_enable(uint8_t tim, bool state);
 int timer_set_period(uint8_t tim, uint16_t period);
 int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
 int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
-int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim));
+int timer_enable_interrupt(uint8_t tim,
+	void (*handler)(uint8_t tim, void *data), void *data);
 int set_pwm_duty(uint8_t tim, uint16_t period);
 
 #ifdef __cplusplus

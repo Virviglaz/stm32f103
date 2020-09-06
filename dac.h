@@ -41,9 +41,9 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
-#ifndef __SPI_H__
-#define __SPI_H__
+
+#ifndef __DAC_H__
+#define __DAC_H__
 
 #ifdef __cplusplus
  extern "C" {
@@ -51,18 +51,31 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
 
-void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high);
-uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value);
-uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
-uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
+void dac_init(const uint8_t channel);
+
+static inline void dac_wr12r1(uint16_t value)
+{
+	DAC->DHR12R1 = value;
+}
+
+static inline void dac_wr12r2(uint16_t value)
+{
+	DAC->DHR12R2 = value;
+}
+
+static inline void dac_wr8r1(uint8_t value)
+{
+	DAC->DHR8R1 = value;
+}
+
+static inline void dac_wr8r21(uint8_t value)
+{
+	DAC->DHR8R2 = value;
+}
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __SPI_H__ */
+#endif /* __DAC_H__ */

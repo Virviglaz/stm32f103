@@ -41,28 +41,17 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
-#ifndef __SPI_H__
-#define __SPI_H__
 
-#ifdef __cplusplus
- extern "C" {
+#include "dac.h"
+
+void dac_init(const uint8_t channel)
+{
+#if defined (STM32F10X_HD) || defined  (STM32F10X_CL) || \
+	defined (STM32F10X_LD_VL) || defined (STM32F10X_MD_VL) || \
+	defined  (STM32F10X_HD_VL)
+	RCC->APB1ENR |= RCC_APB1ENR_DACEN;
+	DAC->CR |= channel == 1 ? DAC_CR_EN1 : DAC_CR_EN2;
+#else
+	#error "No DAC available for this mcu"
 #endif
-
-#include <stm32f10x.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
-
-void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high);
-uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value);
-uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
-uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
-
-#ifdef __cplusplus
 }
-#endif
-
-#endif /* __SPI_H__ */

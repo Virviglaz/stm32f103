@@ -64,51 +64,18 @@ static void rcc_enable(GPIO_TypeDef *gpio)
 #endif /* STM32F10X_HD STM32F10X_XL */
 }
 
-static void output_init(GPIO_TypeDef *gpio, uint8_t pin,
-	enum output_mode_t mode, enum freq_gpio_t freq)
+static void set_mode(GPIO_TypeDef *gpio, uint8_t pin, uint8_t mode, uint8_t cnf)
 {
-	uint16_t cr = (uint16_t)freq | ((uint16_t)mode << 2);
+	uint8_t cr;
 
+	cr = ((uint8_t)cnf << 2) | (uint8_t)mode;
 	pin = pin << 2;
 
-	if (pin <= 31) {
+	if (pin < 32) {
 		gpio->CRL &= ~(0xF << pin);
 		gpio->CRL |= cr << pin;
 	} else {
-		pin -= 31;
-		gpio->CRH &= ~(0xF << pin);
-		gpio->CRH |= cr << pin;
-	}
-}
-
-static void input_init(GPIO_TypeDef *gpio, uint8_t pin, enum input_mode_t mode)
-{
-	uint16_t cr;
-
-	switch (mode) {
-	case ANALOG_INPUT:
-		cr = 0 << 2;
-		break;
-	case DIGITAL_INPUT:
-		cr = 1 << 2;
-		break;
-	case PULL_UP_INPUT:
-		cr = 2 << 2;
-		gpio->BSRR = 1 << pin;
-		break;
-	case PULL_DOWN_INPUT:
-		cr = 2 << 2;
-		gpio->BRR = 1 << pin;
-		break;
-	}
-
-	pin = pin << 2;
-
-	if (pin <= 31) {
-		gpio->CRL &= ~(0xF << pin);
-		gpio->CRL |= cr << pin;
-	} else {
-		pin -= 31;
+		pin -= 32;
 		gpio->CRH &= ~(0xF << pin);
 		gpio->CRH |= cr << pin;
 	}
@@ -125,7 +92,7 @@ void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 
 	for (i = 0; i != 16; i++)
 		if (pinmask & (1 << i))
-			output_init(gpio, i, mode, freq);
+			set_mode(gpio, i, (uint8_t)freq, (uint8_t)mode);
 }
 
 void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
@@ -136,8 +103,16 @@ void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 	rcc_enable(gpio);
 
 	for (i = 0; i != 16; i++)
-		if (pinmask & (1 << i))
-			input_init(gpio, i, mode);
+		if (pinmask & (1 << i)) {
+			if (mode > DIGITAL_INPUT) {
+				set_mode(gpio, i, 0, (uint8_t)PULL_UP_INPUT);
+				if (mode == PULL_UP_INPUT)
+					gpio_set(gpio, i);
+				else
+					gpio_reset(gpio, i);
+			} else
+				set_mode(gpio, i, 0, (uint8_t)mode);
+		}
 }
 
 void gpio_set_state(GPIO_TypeDef *gpio, uint16_t pinmask, bool state)

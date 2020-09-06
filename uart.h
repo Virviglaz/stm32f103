@@ -42,8 +42,8 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
  
-#ifndef __SPI_H__
-#define __SPI_H__
+#ifndef __UART_H__
+#define __UART_H__
 
 #ifdef __cplusplus
  extern "C" {
@@ -51,18 +51,15 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <errno.h>
 
-void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high);
-uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value);
-uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
-uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
+int uart_init(uint8_t uart_num, uint32_t freq);
+void uart_write(uint8_t uart_num, char ch);
+int uart_enable_interrupt(uint8_t uart_num,
+	void (*handler)(uint8_t uart_num, char ch, void *data), void *data);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __SPI_H__ */
+#endif /* __UART_H__ */
+

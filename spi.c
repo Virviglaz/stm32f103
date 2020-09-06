@@ -43,6 +43,8 @@
  */
 
 #include "spi.h"
+#include "rcc.h"
+#include "gpio.h"
 
 inline static void spi_select(GPIO_TypeDef *GPIOx, uint16_t PINx)
 {	
@@ -62,12 +64,13 @@ uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value)
 	while (!(SPIx->SR & SPI_SR_TXE));
 
 	/* Send byte through the SPI peripheral */
-	*((__IO uint8_t *)&SPIx->DR) = value;
+	SPIx->DR = value;
 
 	/* Wait to receive a byte */
 	while (!(SPIx->SR & SPI_SR_RXNE));
+	//while (SPIx->SR & SPI_SR_BSY);
 
-	return *((__IO uint8_t *)&SPIx->DR);
+	return SPIx->DR;
 }
 
 uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
@@ -103,15 +106,47 @@ uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
 	return ret;
 }
 
-void spi_init(SPI_TypeDef *SPIx, enum spi_dir dir,
-	enum spi_clockdiv div, enum spi_clockmode mode)
+static inline uint16_t calc_clock_div(uint32_t bus_freq, uint32_t expected_freq)
 {
-	if (SPIx == SPI1)
+	uint32_t freq;
+	uint16_t div = 1;
+	uint16_t n = 0;
+
+	do {
+		div <<= 1;
+		n++;
+		freq = bus_freq / div;
+	} while (freq > expected_freq);
+
+	return n - 1;
+}
+
+void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high)
+{
+	uint16_t clock_div;
+	uint16_t clock_mode = idle_clock_high ? SPI_CR1_CPHA | SPI_CR1_CPOL : 0;
+	struct system_clock_t *clocks = get_clocks();
+
+	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
+
+	if (SPIx == SPI1) {
 		RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-	if (SPIx == SPI2)
+		//gpio_input_init(PA6, PULL_UP_INPUT);
+		gpio_output_init(PA5, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PA6, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PA7, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		clock_div = calc_clock_div(clocks->apb2_freq, freq);
+	} else if (SPIx == SPI2) {
 		RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+		//gpio_input_init(PB4, PULL_UP_INPUT);
+		gpio_output_init(PB13, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PB14, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		gpio_output_init(PB15, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
+		clock_div = calc_clock_div(clocks->apb1_freq, freq);
+	} else
+		return;
 
 	SPIx->CR2 = 0;
-	SPIx->CR1 = (uint16_t)dir | (uint16_t)div | (uint16_t)mode \
-		| SPI_CR1_SSI | SPI_CR1_SSM | SPI_CR1_MSTR | SPI_CR1_SPE;
+	SPIx->CR1 = (clock_div << 3) | clock_mode | SPI_CR1_SSI | \
+		SPI_CR1_SSM | SPI_CR1_MSTR | SPI_CR1_SPE;
 }
