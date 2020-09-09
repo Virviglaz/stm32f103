@@ -43,9 +43,11 @@
  */
 
 #include "tim.h"
+#include <errno.h>
 
 static struct {
-	void (*handler)(uint8_t tim);
+	void (*handler)(uint8_t tim, void *data);
+	void *data;
 } tim_isr[17];
 
 static TIM_TypeDef *get_tim_base(uint8_t tim)
@@ -235,7 +237,8 @@ int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty)
 	return 0;
 }
 
-int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim))
+int timer_enable_interrupt(uint8_t tim,
+	void (*handler)(uint8_t tim, void *data), void *data)
 {
 	TIM_TypeDef *base = get_tim_base(tim);
 
@@ -245,6 +248,7 @@ int timer_enable_interrupt(uint8_t tim, void (*handler)(uint8_t tim))
 	base->DIER = TIM_DIER_UIE;
 
 	tim_isr[tim - 1].handler = handler;
+	tim_isr[tim - 1].data = data;
 
 	switch (tim) {
 	case 1:
@@ -331,105 +335,105 @@ int set_pwm_duty(uint8_t tim, uint16_t period)
 /* INTERRUPT VECTORS */
 void TIM1_UP_IRQHandler(void)
 {
-	tim_isr[0].handler(1);
+	tim_isr[0].handler(1, tim_isr[0].data);
 	TIM1->SR = 0;
 }
 
 void TIM2_IRQHandler(void)
 {
-	tim_isr[1].handler(2);
+	tim_isr[1].handler(2, tim_isr[1].data);
 	TIM2->SR = 0;
 }
 
 void TIM3_IRQHandler(void)
 {
-	tim_isr[2].handler(3);
+	tim_isr[2].handler(3, tim_isr[2].data);
 	TIM3->SR = 0;
 }
 
 void TIM4_IRQHandler(void)
 {
-	tim_isr[3].handler(4);
+	tim_isr[3].handler(4, tim_isr[3].data);
 	TIM4->SR = 0;
 }
 
 void TIM5_IRQHandler(void)
 {
-	tim_isr[4].handler(5);
+	tim_isr[4].handler(5, tim_isr[4].data);
 	TIM5->SR = 0;
 }
 
 void TIM6_IRQHandler(void)
 {
-	tim_isr[5].handler(6);
+	tim_isr[5].handler(6, tim_isr[5].data);
 	TIM6->SR = 0;
 }
 
 void TIM7_IRQHandler(void)
 {
-	tim_isr[6].handler(7);
+	tim_isr[6].handler(7, tim_isr[6].data);
 	TIM7->SR = 0;
 }
 	
 #ifdef STM32F10X_XL
 void TIM8_IRQHandler(void)
 {
-	tim_isr[7].handler(8);
+	tim_isr[7].handler(8, tim_isr[7].data);
 	TIM8->SR = 0;
 }
 
 
 void TIM9_IRQHandler(void)
 {
-	tim_isr[8].handler(9);
+	tim_isr[8].handler(9, tim_isr[8].data);
 	TIM9->SR = 0;
 }
 
 void TIM10_IRQHandler(void)
 {
-	tim_isr[9].handler(10);
+	tim_isr[9].handler(10, tim_isr[9].data);
 	TIM10->SR = 0;
 }
 
 void TIM11_IRQHandler(void)
 {
-	tim_isr[10].handler(11);
+	tim_isr[10].handler(11, tim_isr[10].data);
 	TIM11->SR = 0;
 }
 
 void TIM12_IRQHandler(void)
 {
-	tim_isr[11].handler(12);
+	tim_isr[11].handler(12, tim_isr[11].data);
 	TIM12->SR = 0;
 }
 
 void TIM13_IRQHandler(void)
 {
-	tim_isr[12].handler(13);
+	tim_isr[12].handler(13, tim_isr[12].data);
 	TIM13->SR = 0;
 }
 
 void TIM14_IRQHandler(void)
 {
-	tim_isr[13].handler(14);
+	tim_isr[13].handler(14, tim_isr[13].data);
 	TIM14->SR = 0;
 }
 
 void TIM15_IRQHandler(void)
 {
-	tim_isr[14].handler(15);
+	tim_isr[14].handler(15, tim_isr[14].data);
 	TIM15->SR = 0;
 }
 
 void TIM16_IRQHandler(void)
 {
-	tim_isr[15].handler(16);
+	tim_isr[15].handler(16, tim_isr[15].data);
 	TIM16->SR = 0;
 }
 
 void TIM17_IRQHandler(void)
 {
-	tim_isr[16].handler(17);
+	tim_isr[16].handler(17, tim_isr[16].data);
 	TIM17->SR = 0;
 }
 
