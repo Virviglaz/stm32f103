@@ -306,11 +306,13 @@ int rtc_init(enum clock_t source, uint32_t prc)
 	return 0;
 }
 
-static void (*sec_irq_handler)(void);
+static void (*sec_irq_handler)(void *data);
+static void *private_data;
 
-void rtc_sec_interrupt(void (*handler)(void))
+void rtc_sec_interrupt(void (*handler)(void *data), void *data)
 {
 	sec_irq_handler = handler;
+	private_data = data;
 
 	RTC->CRH |= RTC_CRH_SECIE;
 
@@ -319,6 +321,6 @@ void rtc_sec_interrupt(void (*handler)(void))
 
 void RTC_IRQHandler(void)
 {
-	sec_irq_handler();
+	sec_irq_handler(private_data);
 	RTC->CRL = 0;
 }
