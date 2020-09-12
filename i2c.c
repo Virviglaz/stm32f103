@@ -51,6 +51,7 @@
 #define I2C_NORM_FREQ	100000
 
 enum task_t {
+	NO_INIT = 0,
 	IN_PROGRESS,
 	DONE,
 	ERR_NOACK,
@@ -70,7 +71,7 @@ struct msg_t {
 };
 
 static I2C_TypeDef *i2c_s[] = { I2C1, I2C2 };
-static struct isr_t {
+static volatile struct isr_t {
 	void (*handler)(void *data, uint8_t err);
 	void *private_data;
 	enum task_t task;
@@ -86,11 +87,13 @@ static inline void start(I2C_TypeDef *i2c)
 static inline void stop(I2C_TypeDef *i2c)
 {
 	i2c->CR1 |= I2C_CR1_STOP;
+	i2c->CR1 &= ~I2C_CR1_STOP;
 }
 
-static int i2c_transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
+static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 {
 	I2C_TypeDef *i2c;
+	struct msg_t *m;
 
 	if (!i2c_num || i2c_num > 2)
 		return -EINVAL;
@@ -98,18 +101,27 @@ static int i2c_transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	i2c_num--;
 	i2c = i2c_s[i2c_num];
 
+	if (isr[i2c_num].task == NO_INIT) {
+		int res = i2c_init(i2c_num + 1, false);
+		if (res)
+			return res;
+	}
+
 	if (isr[i2c_num].task == IN_PROGRESS)
 		return -EILSEQ;
 
 	isr[i2c_num].task = IN_PROGRESS;
-
-	struct msg_t *m = *msg++;
-	if (!m)
+	isr[i2c_num].addr = addr << 1;
+	isr[i2c_num].msg = *msg;
+	if (!isr[i2c_num].msg)
 		return -EINVAL;
 
-	m->next = *msg;
-	isr[i2c_num].msg = m;
-	isr[i2c_num].addr = addr << 1;
+	m = *msg; /* build a linked list */
+	do {
+		msg++;
+		m->next = *msg;
+		m = m->next;
+	} while (m);
 
 	/* initiate the transfer */
 	start(i2c);
@@ -126,9 +138,10 @@ static int i2c_transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 static void isr_process(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
 	struct msg_t *m = isr[i2c_num].msg;
+	uint16_t sr1 = i2c->SR1;
 
+new_msg:
 	if (!m) {
-		i2c->SR1;
 		stop(i2c);
 		isr[i2c_num].task = DONE;
 		if (isr[i2c_num].handler)
@@ -137,8 +150,19 @@ static void isr_process(I2C_TypeDef *i2c, uint8_t i2c_num)
 		return;
 	}
 
+	if (!m->size) {
+		/* switch to next message */
+		m = m->next;
+		isr[i2c_num].msg = m;
+		if (m && m->dir == READING) {
+			start(i2c);
+			return;
+		}
+		goto new_msg;
+	}
+
 	/* start is set, sending address */
-	if (i2c->SR1 & I2C_SR1_SB) {
+	if (sr1 & I2C_SR1_SB) {
 		if (m->dir == READING) {
 			i2c->CR1 |= I2C_CR1_ACK;
 			i2c->DR = isr[i2c_num].addr | 1;
@@ -149,48 +173,30 @@ static void isr_process(I2C_TypeDef *i2c, uint8_t i2c_num)
 		return;
 	}
 
-	/* address is send, processing first message */
-	if (i2c->SR1 & I2C_SR1_ADDR) {
+	if (sr1 & (I2C_SR1_ADDR | I2C_SR1_TXE | I2C_SR1_RXNE)) {
 		i2c->SR2;
-		i2c->DR = *m->data;
-		m->data++;
-		m->size--;
-		return;
-	}
-
-	/* data is send, processing next data */
-	if (i2c->SR1 & I2C_SR1_TXE) {
-		if (m->size) {
+		if (m->dir == WRITING)
 			i2c->DR = *m->data;
-			m->data++;
-			m->size--;
-			return;
+		else {
+			if (!(sr1 & I2C_SR1_RXNE)) {
+				i2c->DR;
+				return;
+			}
+			*m->data = i2c->DR;
+			if (m->size == 1)
+				i2c->CR1 &= ~I2C_CR1_ACK;
 		}
-		isr[i2c_num].msg = m->next;
-		if (m->next && m->next->dir == READING)
-			start(i2c);
-		return;
-	}
-
-	/* receiving the data */
-	if (i2c->SR1 & I2C_SR1_RXNE) {
-		*m->data = i2c->DR;
 		m->data++;
 		m->size--;
-		if (m->size == 1) {
-			i2c->CR1 &= ~I2C_CR1_ACK;
-			stop(i2c);
-			isr[i2c_num].task = DONE;
-			if (isr[i2c_num].handler)
-				isr[i2c_num].handler(isr[i2c_num].private_data,
-					I2C_SUCCESS);
-		}
+		return;
 	}
 }
 
 static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
-	if (i2c->SR1 & I2C_SR1_AF) {
+	uint16_t sr1 = i2c->SR1;
+
+	if (sr1 & I2C_SR1_AF) {
 		i2c->SR1 = 0;
 		isr[i2c_num].task = ERR_NOACK;
 		stop(i2c);
@@ -287,12 +293,12 @@ int i2c_write_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	uint8_t *data, uint16_t size)
 {
 	struct msg_t msg[] = {
-		{ WRITING, &reg, 1},
+		{ WRITING, &reg, 1 },
 		{ WRITING, data, size },
 	};
 	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
 
-	return i2c_transfer(i2c_num, addr, msgs);
+	return transfer(i2c_num, addr, msgs);
 }
 
 int i2c_read_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
@@ -304,7 +310,7 @@ int i2c_read_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	};
 	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
 
-	return i2c_transfer(i2c_num, addr, msgs);
+	return transfer(i2c_num, addr, msgs);
 }
 
 int i2c_write(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
@@ -316,19 +322,19 @@ int i2c_write(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
 	};
 	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
 
-	return i2c_transfer(i2c_num, addr, msgs);
+	return transfer(i2c_num, addr, msgs);
 }
 
 int i2c_read(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
 	uint8_t *data, uint16_t size)
 {
 	struct msg_t msg[] = {
-		{ WRITING, pos, pos_size},
+		{ WRITING, pos, pos_size },
 		{ READING, data, size },
 	};
 	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
 
-	return i2c_transfer(i2c_num, addr, msgs);
+	return transfer(i2c_num, addr, msgs);
 }
 
 int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
