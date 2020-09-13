@@ -51,6 +51,7 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 enum clock_t {
 	NO_CLOCK,
@@ -64,6 +65,14 @@ enum clock_t {
 	INV_CLOCK, /* Invalid value */
 };
 
+struct system_clock_t {
+	uint32_t cpu_freq;
+	uint32_t ahb_freq;
+	uint32_t apb1_freq;
+	uint32_t apb2_freq;
+	bool updated;
+};
+
 enum clock_t hsi_enable(void);
 enum clock_t hse_enable(void);
 enum clock_t get_system_clock(void);
@@ -72,6 +81,14 @@ enum clock_t pll_enable(uint8_t pll, enum clock_t source);
 enum clock_t lse_enable(void);
 enum clock_t get_rtc_clock(void);
 enum clock_t set_rtc_clock(enum clock_t source);
+
+static inline enum clock_t get_pll_source(void)
+{
+	return RCC->CFGR & RCC_CFGR_PLLSRC ? HSE_CLOCK : HSI_CLOCK;
+}
+
+void set_hse_freq(uint32_t freq);
+struct system_clock_t *get_clocks(void);
 
 #ifdef __cplusplus
 }

@@ -44,6 +44,9 @@
 
 #include "rcc.h"
 
+#define HSI_CLOCK_FREQ		8000000
+#define HSE_CLOCK_FREQ		8000000
+
 enum clock_t hsi_enable(void)
 {
 	RCC->CR |= RCC_CR_HSION;
@@ -203,4 +206,89 @@ enum clock_t set_rtc_clock(enum clock_t source)
 		PWR->CR &= ~PWR_CR_DBP;
 
 	return get_rtc_clock();
+}
+
+static uint32_t hse_freq = HSE_CLOCK_FREQ;
+
+void set_hse_freq(uint32_t freq)
+{
+	hse_freq = freq;
+}
+
+static uint8_t get_pll_mult(void)
+{
+	uint32_t mult = (RCC->CFGR & RCC_CFGR_PLLMULL) >> 18;
+
+	switch (mult) {
+	case 2:
+		return 4;
+	case 3:
+		return 5;
+	case 4:
+		return 6;
+	case 5:
+		return 7;
+	case 6:
+		return 8;
+	case 7:
+		return 9;
+	}
+	return 1;
+}
+
+static uint32_t get_ahb_mult(void)
+{
+	uint32_t mult = (RCC->CFGR & RCC_CFGR_HPRE) >> 4;
+
+	return mult < 8 ? 1 : (1 << (mult - 7));
+}
+
+static uint32_t get_apb1_mult(void)
+{
+	uint32_t mult = (RCC->CFGR & RCC_CFGR_PPRE1) >> 8;
+
+	return mult < 4 ? 1 : (1 << (mult - 3));
+}
+
+static uint32_t get_apb2_mult(void)
+{
+	uint32_t mult = (RCC->CFGR & RCC_CFGR_PPRE2) >> 11;
+
+	return mult < 4 ? 1 : (1 << (mult - 3));
+}
+
+struct system_clock_t *get_clocks(void)
+{
+	static struct system_clock_t clocks = { .updated = false };
+	enum clock_t source;
+
+	if (clocks.updated)
+		return &clocks;
+
+	source = get_system_clock();
+
+	switch (source) {
+	case HSI_CLOCK:
+		clocks.cpu_freq = HSI_CLOCK_FREQ;
+		break;
+	case HSE_CLOCK:
+		clocks.cpu_freq = hse_freq;
+		break;
+	case PLL_CLOCK:
+		if (get_pll_source() == HSI_CLOCK)
+			clocks.cpu_freq = HSI_CLOCK / 2 * get_pll_mult();
+		else
+			clocks.cpu_freq = hse_freq * get_pll_mult();
+		break;
+	default:
+		return 0;
+	}
+
+	clocks.ahb_freq = clocks.cpu_freq / get_ahb_mult();
+	clocks.apb1_freq = clocks.ahb_freq / get_apb1_mult();
+	clocks.apb2_freq = clocks.ahb_freq / get_apb2_mult();
+
+	clocks.updated = true;
+
+	return &clocks;
 }
