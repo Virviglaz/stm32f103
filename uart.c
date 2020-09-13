@@ -159,8 +159,6 @@ void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
 	uart = uarts[uart_num];
 	rx = &rx_buf[uart_num];
 
-	uart->CR1 |= USART_CR1_RXNEIE;
-
 	isr_enable(uart_num);
 	rx->buf = buf;
 	rx->size = size;
@@ -168,6 +166,8 @@ void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
 	rx->handler = handler;
 	rx->private_data = private_data;
 	rx->ready = false;
+
+	uart->CR1 |= USART_CR1_RXNEIE;
 }
 
 void uart_disable_rx_buffer(uint8_t uart_num)
@@ -195,8 +195,8 @@ void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
 	tx->private_data = private_data;
 	tx->ready = false;
 
-	uart->CR1 |= USART_CR1_TXEIE;
 	uart->DR = *buf;
+	uart->CR1 |= USART_CR1_TXEIE;
 
 	/* without handler wait for execution */
 	if (!handler)
