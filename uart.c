@@ -190,7 +190,7 @@ void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
 	isr_enable(uart_num);
 	tx->buf = buf;
 	tx->size = size + 1;
-	tx->transfered = 0;
+	tx->transfered = 1;
 	tx->handler = handler;
 	tx->private_data = private_data;
 	tx->ready = false;
