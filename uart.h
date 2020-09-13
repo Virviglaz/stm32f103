@@ -51,11 +51,23 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
+#include <stdbool.h>
 
-int uart_init(uint8_t uart_num, uint32_t freq);
+typedef void (*uart_handler_t) \
+	(uint8_t uart_num, char *data, uint16_t size, void *private_data);
+
+void uart_init(uint8_t uart_num, uint32_t freq);
 void uart_write(uint8_t uart_num, char ch);
-int uart_enable_interrupt(uint8_t uart_num,
-	void (*handler)(uint8_t uart_num, char ch, void *data), void *data);
+void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
+	uart_handler_t handler, void *private_data);
+void uart_disable_rx_buffer(uint8_t uart_num);
+void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
+	uart_handler_t handler, void *private_data);
+void uart_send_string(uint8_t uart_num, const char *str);
+uint16_t uart_received_bytes(uint8_t uart_num);
+bool uart_check_rx_buffer(uint8_t uart_num);
+void uart_reset_rx_buffer(uint8_t uart_num);
+char *uart_get_rx_buffer(uint8_t uart_num);
 
 #ifdef __cplusplus
 }

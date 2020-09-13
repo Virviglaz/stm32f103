@@ -46,24 +46,72 @@
 #include "gpio.h"
 #include "rcc.h"
 #include <errno.h>
+#include <string.h>
 
-static USART_TypeDef *uarts[] = { 0, USART1, USART2, USART3 };
+static USART_TypeDef *uarts[] = { USART1, USART2, USART3 };
+struct buf_t {
+	char *buf;
+	uint16_t size;
+	uint16_t transfered;
+	uart_handler_t handler;
+	void *private_data;
+	bool ready;
+};
 
-#define UART_BRR_SAMPLING16(_PCLK_, _BAUD_) (((_PCLK_) + (_BAUD_) / 2) / _BAUD_)
+static struct buf_t rx_buf[3] = { 0 };
+static struct buf_t tx_buf[3] = { 0 };
+
 __INLINE static uint16_t UART_BRR_SAMPLING8(uint32_t _PCLK_, uint32_t _BAUD_)
 {
     uint16_t Div = (_PCLK_ + _BAUD_ / 2) / _BAUD_;  
     return ((Div & ~0x7) << 1 | (Div & 0x07));
 }
 
-int uart_init(uint8_t uart_num, uint32_t freq)
+static void rx_isr(uint8_t uart_num, USART_TypeDef *uart)
 {
-	USART_TypeDef *uart = uarts[uart_num];
+	struct buf_t *rx = &rx_buf[uart_num];
+	char ch = uart->DR;
+
+	rx->buf[rx->transfered] = ch;
+	rx->transfered++;
+	if (rx->transfered == rx->size || ch == '\r') {
+		rx->ready = true;
+		if (rx->handler) {
+			rx->handler(uart_num + 1, rx->buf,
+				rx->transfered, rx->private_data);
+			rx->ready = false;
+			rx->transfered = 0;
+		}
+	}
+}
+
+static void tx_isr(uint8_t uart_num, USART_TypeDef *uart)
+{
+	struct buf_t *tx = &tx_buf[uart_num];
+
+	uart->DR = tx->buf[tx->transfered];
+	tx->transfered++;
+	if (tx->transfered == tx->size) {
+		tx->ready = true;
+		uart->CR1 &= ~USART_CR1_TXEIE;
+		if (tx->handler)
+			tx->handler(uart_num + 1, tx->buf,
+				tx->transfered, tx->private_data);
+	}
+}
+
+static void isr_enable(uint8_t uart_num)
+{
+	const enum IRQn uart_irq[] = { USART1_IRQn, USART2_IRQn, USART3_IRQn };
+
+	NVIC_EnableIRQ(uart_irq[uart_num]);
+}
+
+void uart_init(uint8_t uart_num, uint32_t freq)
+{
+	USART_TypeDef *uart = uarts[uart_num - 1];
 	struct system_clock_t *clock = get_clocks();
 	uint32_t clock_source;
-
-	if (!uart_num || uart_num > ARRAY_SIZE(uarts))
-		return -EINVAL;
 
 	switch (uart_num) {
 	case 1:
@@ -86,65 +134,130 @@ int uart_init(uint8_t uart_num, uint32_t freq)
 		break;
 	}
 
-	uart->BRR = UART_BRR_SAMPLING8(clock_source, freq);
+	uart->BRR = UART_BRR_SAMPLING8(clock_source, freq << 1);
 	uart->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
 	uart->CR2 = 0;
 	uart->CR3 = 0;
-
-	return 0;
 }
 
 void uart_write(uint8_t uart_num, char ch)
 {
+	uart_num--;
+
 	while (!(uarts[uart_num]->SR & USART_SR_TXE));
 
 	uarts[uart_num]->DR = ch;
 }
 
-static struct {
-	void (*handler)(uint8_t uart_num, char ch, void *data);
-	void *data;
-} isr[3];
-
-int uart_enable_interrupt(uint8_t uart_num,
-	void (*handler)(uint8_t uart_num, char ch, void *data), void *data)
+void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
+	uart_handler_t handler, void *private_data)
 {
-	USART_TypeDef *uart = uarts[uart_num];
-	if (!uart_num || uart_num > ARRAY_SIZE(uarts) ||
-		!(uart->CR1 & USART_CR1_UE))
-		return -EINVAL;
+	USART_TypeDef *uart;
+	struct buf_t *rx;
 
-	isr[uart_num - 1].handler = handler;
-	isr[uart_num - 1].data = data;
+	uart_num--;
+	uart = uarts[uart_num];
+	rx = &rx_buf[uart_num];
 
 	uart->CR1 |= USART_CR1_RXNEIE;
 
-	switch (uart_num) {
-	case 1:
-		NVIC_EnableIRQ(USART1_IRQn);
-		break;
-	case 2:
-		NVIC_EnableIRQ(USART2_IRQn);
-		break;
-	case 3:
-		NVIC_EnableIRQ(USART3_IRQn);
-		break;
-	}
+	isr_enable(uart_num);
+	rx->buf = buf;
+	rx->size = size;
+	rx->transfered = 0;
+	rx->handler = handler;
+	rx->private_data = private_data;
+	rx->ready = false;
+}
 
-	return 0;
+void uart_disable_rx_buffer(uint8_t uart_num)
+{
+	USART_TypeDef *uart = uarts[uart_num - 1];
+
+	uart->CR1 &= ~USART_CR1_RXNEIE;
+}
+
+void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
+	uart_handler_t handler, void *private_data)
+{
+	USART_TypeDef *uart;
+	struct buf_t *tx;
+
+	uart_num--;
+	uart = uarts[uart_num];
+	tx = &tx_buf[uart_num];
+
+	isr_enable(uart_num);
+	tx->buf = buf;
+	tx->size = size + 1;
+	tx->transfered = 1;
+	tx->handler = handler;
+	tx->private_data = private_data;
+	tx->ready = false;
+
+	uart->CR1 |= USART_CR1_TXEIE;
+	uart->DR = *buf;
+
+	/* without handler wait for execution */
+	if (!handler)
+		while (!tx_buf[uart_num].ready) { }
+}
+
+void uart_send_string(uint8_t uart_num, const char *str)
+{
+	uart_send_data(uart_num, (char *)str, strlen(str), 0, 0);
+}
+
+uint16_t uart_received_bytes(uint8_t uart_num)
+{
+	return rx_buf[uart_num - 1].transfered;
+}
+
+bool uart_check_rx_buffer(uint8_t uart_num)
+{
+	return rx_buf[uart_num - 1].ready;
+}
+
+void uart_reset_rx_buffer(uint8_t uart_num)
+{
+	rx_buf[uart_num - 1].transfered = 0;
+	rx_buf[uart_num - 1].ready = false;
+}
+
+char *uart_get_rx_buffer(uint8_t uart_num)
+{
+	return rx_buf[uart_num - 1].buf;
 }
 
 void USART1_IRQHandler(void)
 {
-	isr[0].handler(1, USART1->DR, isr[0].data);
+	uint16_t sr = USART1->SR;
+
+	if (sr & USART_SR_RXNE)
+		rx_isr(0, USART1);
+
+	if (sr & USART_SR_TXE)
+		tx_isr(0, USART1);
 }
 
 void USART2_IRQHandler(void)
 {
-	isr[1].handler(2, USART2->DR, isr[1].data);
+	uint16_t sr = USART2->SR;
+
+	if (sr & USART_SR_RXNE)
+		rx_isr(1, USART2);
+
+	if (sr & USART_SR_TXE)
+		tx_isr(1, USART2);
 }
 
 void USART3_IRQHandler(void)
 {
-	isr[2].handler(3, USART3->DR, isr[2].data);
+	uint16_t sr = USART3->SR;
+
+	if (sr & USART_SR_RXNE)
+		rx_isr(2, USART3);
+
+	if (sr & USART_SR_TXE)
+		tx_isr(2, USART3);
 }
