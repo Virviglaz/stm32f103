@@ -62,3 +62,4 @@ int uart_enable_interrupt(uint8_t uart_num,
 #endif
 
 #endif /* __UART_H__ */
+
