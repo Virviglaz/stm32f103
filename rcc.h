@@ -51,6 +51,7 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 enum clock_t {
 	NO_CLOCK,
@@ -69,6 +70,7 @@ struct system_clock_t {
 	uint32_t ahb_freq;
 	uint32_t apb1_freq;
 	uint32_t apb2_freq;
+	bool updated;
 };
 
 enum clock_t hsi_enable(void);

@@ -259,8 +259,13 @@ static uint32_t get_apb2_mult(void)
 
 struct system_clock_t *get_clocks(void)
 {
-	static struct system_clock_t clocks;
-	enum clock_t source = get_system_clock();
+	static struct system_clock_t clocks = { .updated = false };
+	enum clock_t source;
+
+	if (clocks.updated)
+		return &clocks;
+
+	source = get_system_clock();
 
 	switch (source) {
 	case HSI_CLOCK:
@@ -282,6 +287,8 @@ struct system_clock_t *get_clocks(void)
 	clocks.ahb_freq = clocks.cpu_freq / get_ahb_mult();
 	clocks.apb1_freq = clocks.ahb_freq / get_apb1_mult();
 	clocks.apb2_freq = clocks.ahb_freq / get_apb2_mult();
+
+	clocks.updated = true;
 
 	return &clocks;
 }
