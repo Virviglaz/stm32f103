@@ -54,12 +54,10 @@
 #include <stdbool.h>
 #include <errno.h>
 
-void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high);
-uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value);
-uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
-uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size);
+int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high);
+
+int spi_write_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
+	uint8_t reg, uint8_t *data, uint16_t size);
 
 #ifdef __cplusplus
 }

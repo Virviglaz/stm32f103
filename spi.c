@@ -46,64 +46,114 @@
 #include "rcc.h"
 #include "gpio.h"
 
+static SPI_TypeDef *spi_s[] = { SPI1, SPI2 };
+static DMA_Channel_TypeDef *dma_ch_s[] = {
+	DMA1_Channel1,
+	DMA1_Channel2,
+	DMA1_Channel3,
+	DMA1_Channel4,
+	DMA1_Channel5,
+	DMA1_Channel6,
+	DMA1_Channel7,
+};
+
+static struct isr_t {
+	struct msg_t *msg;
+	void (*handler)(uint8_t spi_num, void *private_data);
+	void *private_data;
+	struct {
+		GPIO_TypeDef *gpio;
+		uint16_t pin;
+	} cs;
+} isrs[2] = { 0 };
+
 inline static void spi_select(GPIO_TypeDef *GPIOx, uint16_t PINx)
 {	
 	GPIOx->BRR = PINx;
 }
 
-inline static void spi_release(SPI_TypeDef *SPIx,
-	GPIO_TypeDef *GPIOx, uint16_t PINx)
+inline static void spi_release(GPIO_TypeDef *GPIOx, uint16_t PINx)
 {
-	while (SPIx->SR & SPI_SR_BSY);
 	GPIOx->BSRR = PINx;	
 }
 
-uint8_t spi_read_byte(SPI_TypeDef *SPIx, uint8_t value)
+struct msg_t {
+	uint8_t *tx;
+	uint8_t *rx;
+	uint16_t size;
+	struct msg_t *next;
+};
+
+static int start_dma(uint8_t spi_num, struct msg_t *msg)
 {
-	/* Loop while DR register in not empty */
-	while (!(SPIx->SR & SPI_SR_TXE));
+	/* available dma channels (-1) starting from 0 */
+	const uint8_t rx_ch[] = { 1, 3 };
+	const uint8_t tx_ch[] = { 2, 4 };
+	SPI_TypeDef *spi = spi_s[spi_num];
+	uint8_t ch_num_tx = tx_ch[spi_num];
+	uint8_t ch_num_rx = rx_ch[spi_num];
+	DMA_Channel_TypeDef *tx = dma_ch_s[ch_num_tx];
+	DMA_Channel_TypeDef *rx = dma_ch_s[ch_num_rx];
 
-	/* Send byte through the SPI peripheral */
-	SPIx->DR = value;
+	spi->CR1 |= SPI_CR1_SPE;
 
-	/* Wait to receive a byte */
-	while (!(SPIx->SR & SPI_SR_RXNE));
-	//while (SPIx->SR & SPI_SR_BSY);
+	if (msg->tx) {
+		spi->CR2 |= SPI_CR2_TXDMAEN;	
+		tx->CPAR = (uint32_t)&spi->DR;
+		tx->CMAR = (uint32_t)msg->tx;
+		tx->CNDTR = msg->size;
+		tx->CCR = DMA_CCR1_PSIZE | DMA_CCR1_MINC | DMA_CCR1_DIR | \
+			DMA_CCR1_EN | (msg->rx ? 0 : DMA_CCR1_TCIE);
+	} else
+		tx->CCR = 0;
+	
+	if (msg->rx) {
+		spi->CR2 |= SPI_CR2_RXDMAEN;
+		rx->CPAR = (uint32_t)&spi->DR;
+		rx->CMAR = (uint32_t)msg->rx;
+		rx->CNDTR = msg->size;
+		rx->CCR = DMA_CCR1_PSIZE | DMA_CCR1_MINC | DMA_CCR1_TCIE | \
+			DMA_CCR1_EN | DMA_CCR1_TCIE;
+	} else
+		rx->CCR = 0;
 
-	return SPIx->DR;
+	return 0;
 }
 
-uint8_t spi_write_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size)
+static int transfer(uint8_t spi_num, struct msg_t **msg,
+	GPIO_TypeDef *gpio, uint16_t pin)
 {
-	uint8_t ret;
+	struct msg_t *m = *msg;
+	struct isr_t *isr;
 
-	spi_select(GPIOx, PINx);
+	if (!spi_num || spi_num > 2)
+		return -EINVAL;
 
-	ret = spi_read_byte(SPIx, reg);
+	spi_num--;
+	isr = &isrs[spi_num];
 
-	while(size--)
-		spi_read_byte(SPIx, *buf++);
+	if (isr->msg)
+		return -EILSEQ;
 
-	spi_release(SPIx, GPIOx, PINx);
+	/* first message */
+	isr->msg = m;
+	isr->cs.gpio = gpio;
+	isr->cs.pin = pin;
 
-	return ret;
-}
+	/* build a linked list */
+	do {
+		msg++;
+		m->next = *msg;
+		m = m->next;
+	} while (m);
 
-uint8_t spi_read_reg(SPI_TypeDef *SPIx, GPIO_TypeDef *GPIOx, uint16_t PINx,
-	uint8_t reg, uint8_t *buf, uint16_t size)
-{
-	uint8_t ret;
+	spi_select(gpio, pin);
+	start_dma(spi_num, isr->msg);
 
-	spi_select(GPIOx, PINx);	
-	ret = spi_read_byte(SPIx, reg);
+	while (isr->msg) { }
+	spi_release(gpio, pin);
 
-	while(size--)
-		*buf++ = spi_read_byte(SPIx, 0x00);
-
-	spi_release(SPIx, GPIOx, PINx);
-
-	return ret;
+	return 0;
 }
 
 static inline uint16_t calc_clock_div(uint32_t bus_freq, uint32_t expected_freq)
@@ -121,32 +171,92 @@ static inline uint16_t calc_clock_div(uint32_t bus_freq, uint32_t expected_freq)
 	return n - 1;
 }
 
-void spi_init(SPI_TypeDef *SPIx, uint32_t freq, bool idle_clock_high)
+int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high)
 {
+	SPI_TypeDef *spi;
 	uint16_t clock_div;
-	uint16_t clock_mode = idle_clock_high ? SPI_CR1_CPHA | SPI_CR1_CPOL : 0;
+	uint16_t clock_mode = clock_high ? SPI_CR1_CPHA | SPI_CR1_CPOL : 0;
 	struct system_clock_t *clocks = get_clocks();
+	uint8_t i;
+
+	if (!spi_num || spi_num > 2)
+		return -EINVAL;
+
+	spi_num--;
+	spi = spi_s[spi_num];
 
 	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 
-	if (SPIx == SPI1) {
+	for (i = 0; i != 7; i++)
+		NVIC_EnableIRQ((enum IRQn)(DMA1_Channel1_IRQn + i));
+
+	switch (spi_num) {
+	case 0:
 		RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-		//gpio_input_init(PA6, PULL_UP_INPUT);
 		gpio_output_init(PA5, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		gpio_output_init(PA6, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		gpio_output_init(PA7, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		clock_div = calc_clock_div(clocks->apb2_freq, freq);
-	} else if (SPIx == SPI2) {
+		break;
+	case 1:
 		RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-		//gpio_input_init(PB4, PULL_UP_INPUT);
 		gpio_output_init(PB13, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		gpio_output_init(PB14, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		gpio_output_init(PB15, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		clock_div = calc_clock_div(clocks->apb1_freq, freq);
-	} else
-		return;
+		break;
+	default:
+		return -EINVAL;
+	}
 
-	SPIx->CR2 = 0;
-	SPIx->CR1 = (clock_div << 3) | clock_mode | SPI_CR1_SSI | \
-		SPI_CR1_SSM | SPI_CR1_MSTR | SPI_CR1_SPE;
+	spi->CR2 = 0;
+	spi->CR1 = (clock_div << 3) | clock_mode | SPI_CR1_SSI | \
+		SPI_CR1_SSM | SPI_CR1_MSTR;
+
+	return 0;
 }
+
+static void isr(void)
+{
+	struct isr_t *isr = &isrs[1];
+
+	isr->msg = isr->msg->next;
+
+	if (isr->msg)
+		start_dma(1, isr->msg);
+}
+
+void DMA1_Channel1_IRQHandler(void)
+{}
+void DMA1_Channel2_IRQHandler(void)
+{}
+void DMA1_Channel3_IRQHandler(void)
+{}
+void DMA1_Channel4_IRQHandler(void)
+{}
+void DMA1_Channel5_IRQHandler(void)
+{
+	DMA1->IFCR = 0x0FFFFFFF;
+	DMA1_Channel5->CCR = 0;
+	isr();
+}
+void DMA1_Channel6_IRQHandler(void)
+{
+	DMA1->IFCR = 0x0FFFFFFF;
+	isr();
+}
+void DMA1_Channel7_IRQHandler(void)
+{}
+
+int spi_write_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
+	uint8_t reg, uint8_t *data, uint16_t size)
+{
+	struct msg_t msg[] = {
+		{ &reg, 0, 1 },
+		{ data, 0, size },
+	};
+	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
+
+	return transfer(spi_num, msgs, gpio, pin);
+}	
