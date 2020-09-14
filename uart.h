@@ -56,17 +56,98 @@
 typedef void (*uart_handler_t) \
 	(uint8_t uart_num, char *data, uint16_t size, void *private_data);
 
+/**
+  * @brief  initialize uart master in full duplex mode.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  freq: uart frequency.
+  *
+  * @retval none.
+  */
+
 void uart_init(uint8_t uart_num, uint32_t freq);
+
+/**
+  * @brief  simple non-interrupt write.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  ch: character to write.
+  *
+  * @retval none.
+  */
 void uart_write(uint8_t uart_num, char ch);
+
+/**
+  * @brief  enable interrupt based receiving.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  buf: rx buffer where the data will be stored.
+  * @param  size: size of rx buffer.
+  * @param  handler: optional handler that executes when data is received.
+  * @param  private_data: optional pointer to send to handler.
+  *
+  * @retval none.
+  */
 void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
 	uart_handler_t handler, void *private_data);
+
+/**
+  * @brief  disable interrupt based receiving.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  *
+  * @retval none.
+  */
 void uart_disable_rx_buffer(uint8_t uart_num);
+
+/**
+  * @brief  send data interrupt based.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  buf: buffer to send.
+  * @param  size: amount of bytes to send.
+  * @param  handler: optional handler that executes when data is send.
+  * @param  private_data: optional pointer to send to handler.
+  *
+  * @retval none.
+  */
 void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
 	uart_handler_t handler, void *private_data);
+
+/**
+  * @brief  send null terminated line to uart using waiting call.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  str: pointer to character buffer.
+  *
+  * @retval none.
+  */
 void uart_send_string(uint8_t uart_num, const char *str);
+
+/**
+  * @brief  get amount of bytes received.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  *
+  * @retval amount of bytes in rx buffer.
+  */
 uint16_t uart_received_bytes(uint8_t uart_num);
+
+/**
+  * @brief  check data ready in rx buffer if handler is skipped.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  *
+  * @retval true if buffer have the data.
+  */
 bool uart_check_rx_buffer(uint8_t uart_num);
+
+/**
+  * @brief  reset rx buffer counter.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  *
+  * @retval none.
+  */
 void uart_reset_rx_buffer(uint8_t uart_num);
+
+/**
+  * @brief  get pointer to rx buffer.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  *
+  * @retval pointer to buffer.
+  */
 char *uart_get_rx_buffer(uint8_t uart_num);
 
 #ifdef __cplusplus
