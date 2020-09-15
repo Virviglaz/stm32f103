@@ -52,12 +52,25 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 
+/**
+  * @brief  Initialize DMA and find a channel.
+  * @param  channel: Number of channel or first free if 0.
+  *
+  * @retval 0 if failed, pointer to channel if found.
+  */
 DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	void (*handler)(void *data), void *data);
 
+/**
+  * @brief  Release DMA channed and disable the interrupt.
+  * @param  ch: Pointer to DMA channel.
+  *
+  * @retval None.
+  */
 static inline void dma_release(DMA_Channel_TypeDef *ch)
 {
-	ch->CCR = 0;
+	if (ch)
+		ch->CCR = 0;
 }
 
 #ifdef __cplusplus

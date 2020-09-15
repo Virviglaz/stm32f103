@@ -71,14 +71,17 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	if (channel > NOF_DMA_CHANNELS)
 		return 0;
 
+	/* find specified channel */
 	if (channel) {
 		DMA_Channel_TypeDef *ch;
 		channel--;
 		ch = dev1_chs[channel];
 
+		/* check channel is free */
 		if (ch->CCR & DMA_CCR1_EN)
 			return 0;
 
+		/* assign handler */
 		isrs[channel].handler = handler;
 		isrs[channel].data = data;
 
@@ -87,6 +90,7 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 		return ch;
 	}
 
+	/* find first free channel */
 	for (i = 0; i != NOF_DMA_CHANNELS; i++) {
 		DMA_Channel_TypeDef *ch = dev1_chs[i];
 		if (ch->CCR & DMA_CCR1_EN)
@@ -95,53 +99,54 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 		return ch;
 	}
 
+	/* no channels found */
 	return 0;
 }
 
 void DMA1_Channel1_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF1;
-	DMA1_Channel1->CCR = 0;
+	dma_release(DMA1_Channel1);
 	isrs[0].handler(isrs[0].data);
 }
 
 void DMA1_Channel2_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF2;
-	DMA1_Channel2->CCR = 0;
+	dma_release(DMA1_Channel2);
 	isrs[1].handler(isrs[1].data);
 }
 
 void DMA1_Channel3_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF3;
-	DMA1_Channel3->CCR = 0;
+	dma_release(DMA1_Channel3);
 	isrs[2].handler(isrs[2].data);
 }
 
 void DMA1_Channel4_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF4;
-	DMA1_Channel4->CCR = 0;
+	dma_release(DMA1_Channel4);
 	isrs[3].handler(isrs[3].data);
 }
 
 void DMA1_Channel5_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF5;
-	DMA1_Channel5->CCR = 0;
+	dma_release(DMA1_Channel5);
 	isrs[4].handler(isrs[4].data);
 }
 
 void DMA1_Channel6_IRQHandler(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF6;
-	DMA1_Channel6->CCR = 0;
+	dma_release(DMA1_Channel6);
 	isrs[5].handler(isrs[5].data);
 }
 
 void DMA1_Channel7_IRQHandler(void)
 {	DMA1->IFCR = DMA_IFCR_CGIF7;
-	DMA1_Channel7->CCR = 0;
+	dma_release(DMA1_Channel7);
 	isrs[6].handler(isrs[6].data);
 }
