@@ -250,7 +250,6 @@ int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high)
 	case 1:
 		RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
 		gpio_output_init(PB13, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
-		//gpio_output_init(PB14, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		gpio_input_init(PB14, PULL_UP_INPUT);
 		gpio_output_init(PB15, PUSHPULL_ALT_OUTPUT, GPIO_FREQ_50MHz);
 		clock_div = calc_clock_div(clocks->apb1_freq, freq);
