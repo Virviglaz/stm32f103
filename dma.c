@@ -43,24 +43,105 @@
  */
 
 #include "dma.h"
-#include "spi.h"
 
-static void dma_spi(uint8_t dev_num, enum dma_dir dir)
+#define NOF_DMA_CHANNELS	7
+
+static DMA_Channel_TypeDef *dev1_chs[] = {
+	DMA1_Channel1,
+	DMA1_Channel2,
+	DMA1_Channel3,
+	DMA1_Channel4,
+	DMA1_Channel5,
+	DMA1_Channel6,
+	DMA1_Channel7,
+};
+
+static struct isr_t {
+	void (*handler)(void *data);
+	void *data;
+} isrs[NOF_DMA_CHANNELS] = { 0 };
+
+DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
+	void (*handler)(void *data), void *data)
 {
-	const SPI_TypeDef *spis[] = { SPI1, SPI2, SPI3 };
-	SPI_TypeDef *spi = (void *)spis[dev_num - 1];	
+	uint8_t i;
+
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+
+	if (channel > NOF_DMA_CHANNELS)
+		return 0;
+
+	if (channel) {
+		DMA_Channel_TypeDef *ch;
+		channel--;
+		ch = dev1_chs[channel];
+
+		if (ch->CCR & DMA_CCR1_EN)
+			return 0;
+
+		isrs[channel].handler = handler;
+		isrs[channel].data = data;
+
+		NVIC_EnableIRQ((enum IRQn)(DMA1_Channel1_IRQn + channel));
+
+		return ch;
+	}
+
+	for (i = 0; i != NOF_DMA_CHANNELS; i++) {
+		DMA_Channel_TypeDef *ch = dev1_chs[i];
+		if (ch->CCR & DMA_CCR1_EN)
+			continue;
+
+		return ch;
+	}
+
+	return 0;
 }
 
-void dma_start(enum dma_dev dev, uint8_t dev_num, enum dma_dir dir)
+void DMA1_Channel1_IRQHandler(void)
 {
-	if (!(RCC->AHBENR & RCC_AHBENR_DMA1EN)) {
-		RCC->AHBENR |= RCC_AHBENR_DMA1EN;
-		//NVIC_EnableIRQ(DMA1_Channel1_IRQn + ch);
-	}
+	DMA1->IFCR = DMA_IFCR_CGIF1;
+	DMA1_Channel1->CCR = 0;
+	isrs[0].handler(isrs[0].data);
+}
 
-	switch (dev) {
-	case DMA_DEV_SPI:
-		dma_spi(dev_num, dir);
-		break;
-	}
+void DMA1_Channel2_IRQHandler(void)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF2;
+	DMA1_Channel2->CCR = 0;
+	isrs[1].handler(isrs[1].data);
+}
+
+void DMA1_Channel3_IRQHandler(void)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF3;
+	DMA1_Channel3->CCR = 0;
+	isrs[2].handler(isrs[2].data);
+}
+
+void DMA1_Channel4_IRQHandler(void)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF4;
+	DMA1_Channel4->CCR = 0;
+	isrs[3].handler(isrs[3].data);
+}
+
+void DMA1_Channel5_IRQHandler(void)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF5;
+	DMA1_Channel5->CCR = 0;
+	isrs[4].handler(isrs[4].data);
+}
+
+void DMA1_Channel6_IRQHandler(void)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF6;
+	DMA1_Channel6->CCR = 0;
+	isrs[5].handler(isrs[5].data);
+}
+
+void DMA1_Channel7_IRQHandler(void)
+{	DMA1->IFCR = DMA_IFCR_CGIF7;
+	DMA1_Channel7->CCR = 0;
+	isrs[6].handler(isrs[6].data);
 }

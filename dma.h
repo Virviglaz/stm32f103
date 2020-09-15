@@ -52,17 +52,13 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 
-enum dma_dev {
-	DMA_DEV_ADC,
-	DMA_DEV_SPI,
-	DMA_DEV_I2C,
-	DMA_DEV_USART,
-};
+DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
+	void (*handler)(void *data), void *data);
 
-enum dma_dir {
-	DMA_DEV_TO_MEM,
-	DMA_MEM_TO_DEV,
-};
+static inline void dma_release(DMA_Channel_TypeDef *ch)
+{
+	ch->CCR = 0;
+}
 
 #ifdef __cplusplus
 }
