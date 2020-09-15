@@ -53,7 +53,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef void (*uart_handler_t) \
+typedef void (*uart_tx_handler_t)(void *private_data);
+typedef void (*uart_rx_handler_t) \
 	(uint8_t uart_num, char *data, uint16_t size, void *private_data);
 
 /**
@@ -86,7 +87,7 @@ void uart_write(uint8_t uart_num, char ch);
   * @retval none.
   */
 void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
-	uart_handler_t handler, void *private_data);
+	uart_rx_handler_t handler, void *private_data);
 
 /**
   * @brief  disable interrupt based receiving.
@@ -104,10 +105,10 @@ void uart_disable_rx_buffer(uint8_t uart_num);
   * @param  handler: optional handler that executes when data is send.
   * @param  private_data: optional pointer to send to handler.
   *
-  * @retval none.
+  * @retval 0 if success.
   */
-void uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
-	uart_handler_t handler, void *private_data);
+int uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
+	uart_tx_handler_t handler, void *private_data);
 
 /**
   * @brief  send null terminated line to uart using waiting call.

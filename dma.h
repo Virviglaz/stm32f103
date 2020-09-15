@@ -42,8 +42,8 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
  
-#ifndef __UART_H__
-#define __UART_H__
+#ifndef __DMA_H__
+#define __DMA_H__
 
 #ifdef __cplusplus
  extern "C" {
@@ -77,5 +77,5 @@ static inline void dma_release(DMA_Channel_TypeDef *ch)
 }
 #endif
 
-#endif /* __UART_H__ */
+#endif /* __DMA_H__ */
 
