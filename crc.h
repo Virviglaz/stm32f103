@@ -54,6 +54,9 @@
 
 uint32_t crc32(uint8_t *buf, uint32_t size);
 
+uint32_t crc32dma8(uint8_t *buf, uint16_t size,
+	void (*handler)(void *data, uint32_t crc), void *data);
+
 #ifdef __cplusplus
 }
 #endif

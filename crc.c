@@ -43,6 +43,8 @@
  */
 
 #include "crc.h"
+#include "dma.h"
+#include <stdbool.h>
 
 uint32_t crc32(uint8_t *buf, uint32_t size)
 {
@@ -53,4 +55,49 @@ uint32_t crc32(uint8_t *buf, uint32_t size)
 		CRC->DR = *buf++;
 
 	return CRC->DR;
+}
+
+static struct {
+	void (*handler)(void *data, uint32_t crc);
+	void *data;
+	DMA_Channel_TypeDef *dma_ch;
+	uint32_t res;
+	bool ready;
+} isr;
+
+static void crc_dma_handler(void *data)
+{
+	dma_release(isr.dma_ch);
+	isr.res = CRC->DR;
+	if (isr.handler)
+		isr.handler(isr.data, isr.res);
+	isr.ready = true;
+}
+
+uint32_t crc32dma8(uint8_t *buf, uint16_t size,
+	void (*handler)(void *data, uint32_t crc), void *data)
+{
+	isr.handler = handler;
+	isr.data = data;
+	isr.ready = false;
+
+	isr.dma_ch = get_dma_ch(0, crc_dma_handler, data);;
+	if (!isr.dma_ch)
+		return crc32(buf, size);
+
+	RCC->AHBENR |= RCC_AHBENR_CRCEN;
+	CRC->CR = CRC_CR_RESET;
+
+	isr.dma_ch->CMAR = (uint32_t)buf;
+	isr.dma_ch->CPAR = (uint32_t)&CRC->DR;
+	isr.dma_ch->CNDTR = size;
+	isr.dma_ch->CCR = DMA_CCR1_TCIE | DMA_CCR1_MINC | DMA_CCR1_MEM2MEM | \
+		DMA_CCR1_DIR | DMA_CCR1_EN;
+
+	if (!handler) {
+		while (!isr.ready) { }
+		return isr.res;
+	}
+
+	return 0;
 }
