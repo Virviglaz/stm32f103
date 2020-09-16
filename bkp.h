@@ -51,6 +51,7 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
+#include "rtos.h"
 
 void bkp_write(uint8_t reg_num, uint16_t value);
 uint16_t bkp_read(uint8_t reg_num);

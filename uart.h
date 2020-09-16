@@ -52,6 +52,7 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "rtos.h"
 
 typedef void (*uart_tx_handler_t)(void *private_data);
 typedef void (*uart_rx_handler_t) \
@@ -150,6 +151,39 @@ void uart_reset_rx_buffer(uint8_t uart_num);
   * @retval pointer to buffer.
   */
 char *uart_get_rx_buffer(uint8_t uart_num);
+
+#ifdef FREERTOS
+
+/**
+  * @brief  send data using RTOS.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  buf: buffer to send.
+  * @param  size: amount of bytes to send.
+  *
+  * @retval none.
+  */
+void uart_send_data_rtos(uint8_t uart_num, char *buf, uint16_t size);
+
+/**
+  * @brief  send null termitanted string using RTOS.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  buf: buffer to send.
+  *
+  * @retval none.
+  */
+void uart_send_string_rtos(uint8_t uart_num, char *string);
+
+/**
+  * @brief  Wait for data from uart using RTOS.
+  * @param  uart_num: can be 1, or 3. Uart number.
+  * @param  buf: buffer to send.
+  * @param  size: maximum buffer size.
+  *
+  * @retval amount of bytes received.
+  */
+uint16_t uart_receive_rtos(uint8_t uart_num, char *buf, uint16_t size);
+
+#endif /* FREERTOS */
 
 #ifdef __cplusplus
 }

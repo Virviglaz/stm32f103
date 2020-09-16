@@ -101,3 +101,47 @@ uint32_t crc32dma8(uint8_t *buf, uint16_t size,
 
 	return 0;
 }
+
+#ifdef FREERTOS
+
+struct param_t {
+	TaskHandle_t handle;
+	uint32_t crc32;
+};
+
+static void rtos_handler(void *data, uint32_t res)
+{
+	struct param_t *param = data;
+
+	param->crc32 = res;
+
+	vTaskResume(param->handle);
+}
+
+uint32_t crc32rtos(uint8_t *buf, uint16_t size)
+{
+	static SemaphoreHandle_t mutex = 0;
+	uint32_t ret;
+	struct param_t *param = malloc(sizeof(*param));
+
+	if (!mutex)
+		mutex = xSemaphoreCreateMutex();
+
+	param->handle = xTaskGetCurrentTaskHandle();
+
+	xSemaphoreTake(mutex, portMAX_DELAY);
+
+	crc32dma8(buf, size, rtos_handler, param);
+
+	vTaskSuspend(param->handle);
+
+	xSemaphoreGive(mutex);
+
+	ret = param->crc32;
+
+	free(param);
+
+	return ret;
+}
+
+#endif /* FREERTOS */

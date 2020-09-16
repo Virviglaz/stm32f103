@@ -51,6 +51,7 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
+#include "rtos.h"
 
 void dac_init(const uint8_t channel);
 

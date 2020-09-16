@@ -52,6 +52,7 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "rtos.h"
 
 #define I2C_SUCCESS	0
 #define I2C_ERR_NOACK	1

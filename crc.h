@@ -45,12 +45,13 @@
 #ifndef __CRC_H__
 #define __CRC_H__
 
-#include <stdint.h>
-#include "stm32f10x.h"
-
 #ifdef __cplusplus
  extern "C" {
 #endif
+
+#include <stdint.h>
+#include "stm32f10x.h"
+#include "rtos.h"
 
 /**
   * @brief  Calculates crc32 function. Waiting call.
@@ -72,6 +73,19 @@ uint32_t crc32(uint8_t *buf, uint32_t size);
   */
 uint32_t crc32dma8(uint8_t *buf, uint16_t size,
 	void (*handler)(void *data, uint32_t crc), void *data);
+
+#ifdef FREERTOS
+
+/**
+  * @brief  Calculates crc32 function using FreeRTOS.
+  * @param  buf: Pointer to buffer with the data.
+  * @param  size: Amount of bytes to be used for calculation.
+  *
+  * @retval Calcutated value.
+  */
+uint32_t crc32rtos(uint8_t *buf, uint16_t size);
+
+#endif /* FREERTOS */
 
 #ifdef __cplusplus
 }

@@ -53,6 +53,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include "rtos.h"
 
 #define PA0			GPIOA, BIT(0)
 #define PA1			GPIOA, BIT(1)

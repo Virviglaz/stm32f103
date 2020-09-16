@@ -51,6 +51,7 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
+#include "rtos.h"
 
 static inline void adc_start(uint8_t adc_num)
 {

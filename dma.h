@@ -51,6 +51,7 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
+#include "rtos.h"
 
 /**
   * @brief  Initialize DMA and find a channel.

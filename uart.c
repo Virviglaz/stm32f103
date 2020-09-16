@@ -200,6 +200,8 @@ int uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
 	if (!tx->dma_ch)
 		return -EINVAL;
 
+	tx->handler = handler;
+	tx->private_data = private_data;
 	tx->dma_ch->CNDTR = size;
 	tx->dma_ch->CPAR = (uint32_t)&uart->DR;
 	tx->dma_ch->CMAR = (uint32_t)buf;
@@ -271,3 +273,58 @@ void USART3_IRQHandler(void)
 	if (sr & USART_SR_TXE)
 		tx_isr(2, USART3);
 }
+
+#ifdef FREERTOS
+
+static SemaphoreHandle_t tx_mutex[3] = { 0 };
+static SemaphoreHandle_t rx_mutex[3] = { 0 };
+static uint16_t bytes_received[3];
+
+static void rtos_tx_handler(void *data)
+{
+	xSemaphoreGive(data);
+}
+
+static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
+	void *private_data)
+{
+	bytes_received[uart_num - 1] = size;
+
+	vTaskResume(private_data);
+}
+
+void uart_send_data_rtos(uint8_t uart_num, char *buf, uint16_t size)
+{
+	if (!tx_mutex[uart_num - 1])
+		tx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(tx_mutex[uart_num - 1], portMAX_DELAY);
+
+	uart_send_data(uart_num, buf, size,
+		rtos_tx_handler, tx_mutex[uart_num - 1]);
+}
+
+void uart_send_string_rtos(uint8_t uart_num, char *string)
+{
+	uart_send_data_rtos(uart_num, string, strlen(string));
+}
+
+uint16_t uart_receive_rtos(uint8_t uart_num, char *buf, uint16_t size)
+{
+	TaskHandle_t handle = xTaskGetCurrentTaskHandle();
+
+	if (!rx_mutex[uart_num - 1])
+		rx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(rx_mutex[uart_num - 1], portMAX_DELAY);
+
+	uart_enable_rx_buffer(uart_num, buf, size, rtos_rx_handler, handle);
+
+	vTaskSuspend(handle);
+
+	xSemaphoreGive(rx_mutex[uart_num - 1]);
+
+	return bytes_received[uart_num - 1];
+}
+
+#endif /* FREERTOS */

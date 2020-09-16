@@ -53,6 +53,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include "rtos.h"
 
 int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
 int timer_enable(uint8_t tim, bool state);

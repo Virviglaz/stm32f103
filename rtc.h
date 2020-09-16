@@ -45,13 +45,14 @@
 #ifndef _RTC_H_
 #define _RTC_H_
 
-#include <stdint.h>
-#include "stm32f10x.h"
-#include "rcc.h"
-
 #ifdef __cplusplus
  extern "C" {
 #endif
+
+#include <stdint.h>
+#include "stm32f10x.h"
+#include "rcc.h"
+#include "rtos.h"
 
 #define LSE_PRESCALER			32768 /* External crystal 32768 */
 #define LSI_PRESCALER			40000 /* Internal clock 40kHz */
