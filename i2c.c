@@ -45,6 +45,7 @@
 #include "i2c.h"
 #include "gpio.h"
 #include "rcc.h"
+#include "dma.h"
 #include <errno.h>
 
 #define I2C_FAST_FREQ	400000
@@ -71,13 +72,16 @@ struct msg_t {
 };
 
 static I2C_TypeDef *i2c_s[] = { I2C1, I2C2 };
-static volatile struct isr_t {
+static struct isr_t {
+	I2C_TypeDef *i2c;
 	void (*handler)(void *data, uint8_t err);
 	void *private_data;
 	enum task_t task;
 	uint8_t addr;
 	struct msg_t *msg;
-} isr[2] = { 0 };
+	DMA_Channel_TypeDef *tx_dma;
+	DMA_Channel_TypeDef *rx_dma;
+} isrs[2] = { 0 };
 
 static inline void start(I2C_TypeDef *i2c)
 {
@@ -90,9 +94,58 @@ static inline void stop(I2C_TypeDef *i2c)
 	i2c->CR1 &= ~I2C_CR1_STOP;
 }
 
+static void start_next_message(struct isr_t *isr)
+{
+	struct msg_t *m = isr->msg;
+	I2C_TypeDef *i2c = isr->i2c;
+
+	if (m->dir == READING) {
+		start(i2c);
+		i2c->CR1 |= I2C_CR1_ACK;
+		i2c->DR = isr->addr | 1;
+		if (!m->next) /* last message */
+			i2c->CR2 |= I2C_CR2_LAST;
+		isr->rx_dma->CMAR = (uint32_t)m->data;
+		isr->rx_dma->CPAR = (uint32_t)&i2c->DR;
+		isr->rx_dma->CNDTR = m->size;
+		isr->rx_dma->CCR = DMA_CCR1_EN | DMA_CCR1_TCIE | \
+			DMA_CCR1_MINC;
+	} else {
+		i2c->CR1 &= ~I2C_CR1_ACK;
+		isr->tx_dma->CMAR = (uint32_t)m->data;
+		isr->tx_dma->CPAR = (uint32_t)&i2c->DR;
+		isr->tx_dma->CNDTR = m->size;
+		isr->tx_dma->CCR = DMA_CCR1_EN | DMA_CCR1_TCIE | \
+			DMA_CCR1_MINC | DMA_CCR1_DIR;
+	}
+
+	isr->msg = m->next;
+}
+
+static void dma_isr(void *data)
+{
+	struct isr_t *isr = data;
+	struct msg_t *m = isr->msg;
+
+	if (!m) {
+		dma_release(isr->tx_dma);
+		dma_release(isr->rx_dma);
+		stop(isr->i2c);
+		if (isr->handler)
+			isr->handler(isr->private_data, I2C_SUCCESS);
+		isr->task = DONE;
+		return;
+	}
+
+	start_next_message(isr);
+}
+
 static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 {
+	const uint8_t tx_ch[] = { 6, 4 };
+	const uint8_t rx_ch[] = { 7, 5 };
 	I2C_TypeDef *i2c;
+	struct isr_t *isr;
 	struct msg_t *m;
 
 	if (!i2c_num || i2c_num > 2)
@@ -100,20 +153,27 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 
 	i2c_num--;
 	i2c = i2c_s[i2c_num];
+	isr = &isrs[i2c_num];
 
-	if (isr[i2c_num].task == NO_INIT) {
+	if (isr->task == NO_INIT) {
 		int res = i2c_init(i2c_num + 1, false);
 		if (res)
 			return res;
 	}
 
-	if (isr[i2c_num].task == IN_PROGRESS)
+	if (isr->task == IN_PROGRESS)
 		return -EILSEQ;
 
-	isr[i2c_num].task = IN_PROGRESS;
-	isr[i2c_num].addr = addr << 1;
-	isr[i2c_num].msg = *msg;
-	if (!isr[i2c_num].msg)
+	isr->task = IN_PROGRESS;
+	isr->addr = addr << 1;
+	isr->msg = *msg;
+	if (!isr->msg)
+		return -EINVAL;
+
+	isr->tx_dma = get_dma_ch(tx_ch[i2c_num], dma_isr, isr);
+	isr->rx_dma = get_dma_ch(rx_ch[i2c_num], dma_isr, isr);
+
+	if (!isr->tx_dma || !isr->rx_dma)
 		return -EINVAL;
 
 	m = *msg; /* build a linked list */
@@ -123,43 +183,28 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 		m = m->next;
 	} while (m);
 
+	i2c->CR2 &= ~I2C_CR2_LAST;
+	i2c->CR2 |= I2C_CR2_ITERREN | I2C_CR2_ITEVTEN;
+
 	/* initiate the transfer */
+	start_next_message(isr);
 	start(i2c);
 
 	/* having the handler this is non-waiting call */
-	if (!isr[i2c_num].handler)
-		while (isr[i2c_num].task < DONE) { }
+	if (!isr->handler)
+		while (isr->task < DONE) { }
 	else
 		return 0;
 
-	return isr[i2c_num].task == DONE ? 0 : -(int)isr[i2c_num].task;
+	return isr->task == DONE ? 0 : -(int)isr->task;
 }
 
-static void isr_process(I2C_TypeDef *i2c, uint8_t i2c_num)
+/* this ISR occures when address is send and initiate DMA transfer */
+static void isr_address(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
-	struct msg_t *m = isr[i2c_num].msg;
+	struct isr_t *isr = &isrs[i2c_num];
+	struct msg_t *m = isr->msg;
 	uint16_t sr1 = i2c->SR1;
-
-new_msg:
-	if (!m) {
-		stop(i2c);
-		isr[i2c_num].task = DONE;
-		if (isr[i2c_num].handler)
-			isr[i2c_num].handler(isr[i2c_num].private_data,
-				I2C_SUCCESS);
-		return;
-	}
-
-	if (!m->size) {
-		/* switch to next message */
-		m = m->next;
-		isr[i2c_num].msg = m;
-		if (m && m->dir == READING) {
-			start(i2c);
-			return;
-		}
-		goto new_msg;
-	}
 
 	/* start is set, sending address */
 	if (sr1 & I2C_SR1_SB) {
@@ -173,52 +218,39 @@ new_msg:
 		return;
 	}
 
-	if (sr1 & (I2C_SR1_ADDR | I2C_SR1_TXE | I2C_SR1_RXNE)) {
+	if (sr1 & I2C_SR1_ADDR) {
 		i2c->SR2;
-		if (m->dir == WRITING)
-			i2c->DR = *m->data;
-		else {
-			if (!(sr1 & I2C_SR1_RXNE)) {
-				i2c->DR;
-				return;
-			}
-			*m->data = i2c->DR;
-			if (m->size == 1)
-				i2c->CR1 &= ~I2C_CR1_ACK;
-		}
-		m->data++;
-		m->size--;
+		//i2c->CR2 &= ~(I2C_CR2_ITERREN | I2C_CR2_ITEVTEN);
 		return;
 	}
 }
 
 static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
+	struct isr_t *isr = &isrs[i2c_num];
 	uint16_t sr1 = i2c->SR1;
 
 	if (sr1 & I2C_SR1_AF) {
 		i2c->SR1 = 0;
-		isr[i2c_num].task = ERR_NOACK;
+		isr->task = ERR_NOACK;
 		stop(i2c);
-		if (isr[i2c_num].handler)
-			isr[i2c_num].handler(isr[i2c_num].private_data,
-				I2C_ERR_NOACK);
+		if (isr->handler)
+			isr->handler(isr->private_data, I2C_ERR_NOACK);
 		return;
 	}
 
 	/* rest of the errors */
 	i2c->SR1 = 0;
 	i2c->SR2 = 0;
-	isr[i2c_num].task = ERR_UNKNOWN;
+	isr->task = ERR_UNKNOWN;
 	stop(i2c);
-	if (isr[i2c_num].handler)
-			isr[i2c_num].handler(isr[i2c_num].private_data,
-				ERR_UNKNOWN);
+	if (isr->handler)
+			isr->handler(isr->private_data, ERR_UNKNOWN);
 }
 
 void I2C1_EV_IRQHandler(void)
 {
-	isr_process(I2C1, 0);
+	isr_address(I2C1, 0);
 }
 
 void I2C1_ER_IRQHandler(void)
@@ -228,7 +260,7 @@ void I2C1_ER_IRQHandler(void)
 
 void I2C2_EV_IRQHandler(void)
 {
-	isr_process(I2C2, 1);
+	isr_address(I2C2, 1);
 }
 
 void I2C2_ER_IRQHandler(void)
@@ -239,6 +271,7 @@ void I2C2_ER_IRQHandler(void)
 int i2c_init(uint8_t i2c_num, bool fast_mode)
 {
 	I2C_TypeDef *i2c;
+	struct isr_t *isr;
 	struct system_clock_t *clock = get_clocks();
 	uint16_t freqrange;
 
@@ -264,6 +297,7 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 	}
 
 	i2c = i2c_s[i2c_num];
+	isr = &isrs[i2c_num];
 
 	if (fast_mode) {
 		i2c->CCR = clock->apb1_freq / (I2C_FAST_FREQ * 3);
@@ -280,11 +314,11 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 
 	freqrange = clock->apb1_freq / 1000000;
 
-	i2c->CR2 = I2C_CR2_ITERREN | I2C_CR2_ITEVTEN | \
-		((clock->apb1_freq / 1000000) & I2C_CR2_FREQ);
+	i2c->CR2 = I2C_CR2_DMAEN | ((clock->apb1_freq / 1000000) & I2C_CR2_FREQ);
 	i2c->CR1 = I2C_CR1_PE;
 
-	isr[i2c_num].task = DONE;
+	isr->task = DONE;
+	isr->i2c = i2c;
 
 	return 0;
 }
@@ -344,8 +378,8 @@ int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 		return -EINVAL;
 	i2c_num--;
 
-	isr[i2c_num].handler = handler;
-	isr[i2c_num].private_data = private_data;
+	isrs[i2c_num].handler = handler;
+	isrs[i2c_num].private_data = private_data;
 
 	return 0;
 }
