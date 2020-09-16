@@ -52,8 +52,24 @@
  extern "C" {
 #endif
 
+/**
+  * @brief  Calculates crc32 function. Waiting call.
+  * @param  buf: Pointer to buffer with the data.
+  * @param  size: Amount of bytes to be used for calculation.
+  *
+  * @retval Calcutated value.
+  */
 uint32_t crc32(uint8_t *buf, uint32_t size);
 
+/**
+  * @brief  Calculates crc32 function. Non-waiting call. DMA used.
+  * @param  buf: Pointer to buffer with the data.
+  * @param  size: Amount of bytes to be used for calculation.
+  * @param  handler: Pointer to function to be called at finish.
+  * @param  data: Pointer to data to be provided to handler.
+  *
+  * @retval 0 handler is provided, calcutated value otherwise.
+  */
 uint32_t crc32dma8(uint8_t *buf, uint16_t size,
 	void (*handler)(void *data, uint32_t crc), void *data);
 

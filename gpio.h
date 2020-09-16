@@ -177,22 +177,70 @@ enum freq_gpio_t {
 	GPIO_FREQ_50MHz = 3,
 };
 
+/**
+  * @brief  Initialize GPIO pin for output.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to be initialized.
+  * @param  mode: Configure mode of pin.
+  * @param  freq: Frequency limitation for pin.
+  *
+  * @retval None.
+  */
 void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 	enum output_mode_t mode, enum freq_gpio_t freq);
+
+/**
+  * @brief  Initialize GPIO pin for input.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to be initialized.
+  * @param  mode: Configure mode of pin.
+  *
+  * @retval None.
+  */
 void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 	enum input_mode_t mode);
+
+/**
+  * @brief  Change pin state HIGH/LOW.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to be initialized.
+  * @param  state: true to set HIGH, false to set LOW.
+  *
+  * @retval None.
+  */
 void gpio_set_state(GPIO_TypeDef *gpio, uint16_t pinmask, bool state);
 
+/**
+  * @brief  Macro to set pin HIGH using fast bit access.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to set high.
+  *
+  * @retval None.
+  */
 static inline void gpio_set(GPIO_TypeDef *gpio, uint16_t pinmask)
 {
 	gpio->BSRR = pinmask;
 }
 
+/**
+  * @brief  Macro to set pin LOW using fast bit access.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to set low.
+  *
+  * @retval None.
+  */
 static inline void gpio_reset(GPIO_TypeDef *gpio, uint16_t pinmask)
 {
 	gpio->BRR = pinmask;
 }
 
+/**
+  * @brief  Macro to read port value.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins of port to read from.
+  *
+  * @retval masked port value.
+  */
 static inline uint16_t gpio_read(GPIO_TypeDef *gpio, uint16_t pinmask)
 {
 	return gpio->IDR & pinmask;

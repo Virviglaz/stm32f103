@@ -55,6 +55,8 @@
 /**
   * @brief  Initialize DMA and find a channel.
   * @param  channel: Number of channel or first free if 0.
+  * @param  handler: Pointer to function to be called at finish.
+  * @param  data: Pointer to data to be provided to handler.
   *
   * @retval 0 if failed, pointer to channel if found.
   */
