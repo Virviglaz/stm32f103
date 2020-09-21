@@ -93,7 +93,7 @@ static struct isr_t {
 static inline void start(I2C_TypeDef *i2c)
 {
 	/* TODO: remove this STOP bit polling! */
-	//while (i2c->CR1 & I2C_CR1_STOP) { }
+	while (i2c->CR1 & I2C_CR1_STOP) { }
 	i2c->CR1 |= I2C_CR1_START;
 }
 
@@ -425,7 +425,7 @@ static void rtos_handler(void *task, uint8_t err)
 	struct rtos_task_t *param = task;
 
 	param->err = err;
-	vTaskResume(param->task_handler);
+	portYIELD_FROM_ISR(xTaskResumeFromISR(param->task_handler));
 }
 
 int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
@@ -449,10 +449,9 @@ int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 
 	i2c_set_handler(i2c_num, rtos_handler, &params);
 
-	//res = i2c_write_reg(i2c_num, addr, reg, data, size);
 	res = transfer(i2c_num, addr, msgs);
-
-	vTaskSuspend(params.task_handler);
+	if (!res)
+		vTaskSuspend(params.task_handler);
 
 	xSemaphoreGive(mutex[i2c_num - 1]);
 
@@ -468,6 +467,12 @@ int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	int res;
 	struct rtos_task_t params;
 
+	struct msg_t msg[] = {
+		{ WRITING, &reg, 1 },
+		{ READING, data, size },
+	};
+	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
+
 	if (!mutex[i2c_num - 1])
 		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
 
@@ -477,9 +482,9 @@ int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 
 	i2c_set_handler(i2c_num, rtos_handler, &params);
 
-	res = i2c_read_reg(i2c_num, addr, reg, data, size);
-
-	vTaskSuspend(params.task_handler);
+	res = transfer(i2c_num, addr, msgs);
+	if (!res)
+		vTaskSuspend(params.task_handler);
 
 	xSemaphoreGive(mutex[i2c_num - 1]);
 

@@ -115,7 +115,7 @@ static void rtos_handler(void *data, uint32_t res)
 
 	param->crc32 = res;
 
-	vTaskResume(param->handle);
+	portYIELD_FROM_ISR(xTaskResumeFromISR(param->handle));
 }
 
 uint32_t crc32rtos(uint8_t *buf, uint16_t size)
@@ -135,11 +135,11 @@ uint32_t crc32rtos(uint8_t *buf, uint16_t size)
 
 	vTaskSuspend(param->handle);
 
-	xSemaphoreGive(mutex);
-
 	ret = param->crc32;
 
 	free(param);
+
+	xSemaphoreGive(mutex);
 
 	return ret;
 }

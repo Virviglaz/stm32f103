@@ -282,7 +282,7 @@ static uint16_t bytes_received[3];
 
 static void rtos_tx_handler(void *data)
 {
-	xSemaphoreGive(data);
+	xSemaphoreGiveFromISR(data, NULL);
 }
 
 static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
@@ -290,7 +290,7 @@ static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
 {
 	bytes_received[uart_num - 1] = size;
 
-	vTaskResume(private_data);
+	xTaskResumeFromISR(private_data);
 }
 
 void uart_send_data_rtos(uint8_t uart_num, char *buf, uint16_t size)
