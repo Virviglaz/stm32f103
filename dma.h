@@ -76,6 +76,22 @@ static inline void dma_release(DMA_Channel_TypeDef *ch)
 		ch->CCR = 0;
 }
 
+#ifdef FREERTOS
+
+/**
+  * @brief  Copy data memory to memory using DMA and RTOS.
+  * @param  dst: pointer to the destination array.
+  * @param  src: pointer to the source of data to be copied.
+  * @param  size: number of bytes to copy.
+  *
+  * @retval 0 if failed, pointer to channel if found.
+  */
+void memcpy_dma8(uint8_t *dst, const uint8_t *src, uint16_t size);
+void memcpy_dma16(uint16_t *dst, const uint16_t *src, uint16_t size);
+void memcpy_dma32(uint32_t *dst, const uint32_t *src, uint16_t size);
+
+#endif /* FREERTOS */
+
 #ifdef __cplusplus
 }
 #endif

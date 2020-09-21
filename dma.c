@@ -43,6 +43,7 @@
  */
 
 #include "dma.h"
+#include <string.h>
 
 #define NOF_DMA_CHANNELS	7
 
@@ -154,4 +155,85 @@ void DMA1_Channel7_IRQHandler(void)
 {	DMA1->IFCR = DMA_IFCR_CGIF7;
 	dma_release(DMA1_Channel7);
 	isrs[6].handler(isrs[6].data);
+}
+
+#ifndef FREERTOS
+
+static volatile int busy;
+static void handler(void *data)
+{
+	busy = 0;
+}
+
+static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
+{
+	DMA_Channel_TypeDef *ch;
+
+	ch = get_dma_ch(0, handler, 0);
+
+	if (!ch) /* failed to get channel, use cpu instead */
+		memcpy(dst, src, size);
+	else {
+		busy = !0;
+		ch->CNDTR = size;
+		ch->CMAR = (uint32_t)src;
+		ch->CPAR = (uint32_t)dst;
+		ch->CCR = DMA_CCR1_MEM2MEM | DMA_CCR1_MINC | DMA_CCR1_PINC | \
+			DMA_CCR1_DIR | DMA_CCR1_TCIE | DMA_CCR1_EN | flag;
+		while(busy) { }
+		dma_release(ch);
+	}
+}
+
+#else /* FREERTOS */
+
+static void handler(void *data)
+{
+	portYIELD_FROM_ISR(xTaskResumeFromISR(data));
+}
+
+static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
+{
+	static SemaphoreHandle_t mutex = 0;
+	DMA_Channel_TypeDef *ch;
+	TaskHandle_t handle;
+
+	if (!mutex)
+		mutex = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex, portMAX_DELAY);
+
+	ch = get_dma_ch(0, handler, handle);
+
+	if (!ch) /* failed to get channel, use cpu instead */
+		memcpy(dst, src, size);
+	else {
+		handle = xTaskGetCurrentTaskHandle();
+		ch->CNDTR = size;
+		ch->CMAR = (uint32_t)src;
+		ch->CPAR = (uint32_t)dst;
+		ch->CCR = DMA_CCR1_MEM2MEM | DMA_CCR1_MINC | DMA_CCR1_PINC | \
+			DMA_CCR1_DIR | DMA_CCR1_TCIE | DMA_CCR1_EN | flag;
+		vTaskSuspend(handle);
+		dma_release(ch);
+	}
+
+	xSemaphoreGive(mutex);
+}
+
+#endif /* FREERTOS */
+
+void memcpy_dma8(uint8_t *dst, const uint8_t *src, uint16_t size)
+{
+	memcpy_dma(dst, src, size, 0);
+}
+
+void memcpy_dma16(uint16_t *dst, const uint16_t *src, uint16_t size)
+{
+	memcpy_dma(dst, src, size, DMA_CCR1_PSIZE_0 | DMA_CCR1_MSIZE_0);
+}
+
+void memcpy_dma32(uint32_t *dst, const uint32_t *src, uint16_t size)
+{
+	memcpy_dma(dst, src, size, DMA_CCR1_PSIZE_1 | DMA_CCR1_MSIZE_1);
 }
