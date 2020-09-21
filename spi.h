@@ -92,6 +92,38 @@ int spi_write_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 int spi_read_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 	uint8_t reg, uint8_t *data, uint16_t size);
 
+#ifdef FREERTOS
+
+/**
+  * @brief  Write a sequence to register using RTOS.
+  * @param  spi_num: Can be 1 or 2 to select the SPI peripheral.
+  * @param  gpio: Chip select gpio.
+  * @param  pin: Chip select pin.
+  * @param  reg: Register number to write to.
+  * @param  data: Pointer where the data is stored.
+  * @param  size: Amount of bytes to write.
+  *
+  * @retval 0 if success.
+  */
+int spi_write_reg_rtos(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
+	uint8_t reg, uint8_t *data, uint16_t size);
+
+/**
+  * @brief  Read a sequence from register using RTOS.
+  * @param  spi_num: Can be 1 or 2 to select the SPI peripheral.
+  * @param  gpio: Chip select gpio.
+  * @param  pin: Chip select pin.
+  * @param  reg: Register number to read from.
+  * @param  data: Pointer where the data will be stored.
+  * @param  size: Amount of bytes to read.
+  *
+  * @retval 0 if success.
+  */
+int spi_read_reg_rtos(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
+	uint8_t reg, uint8_t *data, uint16_t size);
+
+#endif /* FREERTOS */
+
 #ifdef __cplusplus
 }
 #endif
