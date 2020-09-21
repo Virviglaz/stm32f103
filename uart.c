@@ -311,12 +311,14 @@ void uart_send_string_rtos(uint8_t uart_num, char *string)
 
 uint16_t uart_receive_rtos(uint8_t uart_num, char *buf, uint16_t size)
 {
-	TaskHandle_t handle = xTaskGetCurrentTaskHandle();
+	TaskHandle_t handle;
 
 	if (!rx_mutex[uart_num - 1])
 		rx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
 
 	xSemaphoreTake(rx_mutex[uart_num - 1], portMAX_DELAY);
+
+	handle = xTaskGetCurrentTaskHandle();
 
 	uart_enable_rx_buffer(uart_num, buf, size, rtos_rx_handler, handle);
 

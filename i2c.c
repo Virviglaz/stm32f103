@@ -51,6 +51,7 @@
 #define I2C_FAST_FREQ	400000
 #define I2C_NORM_FREQ	100000
 
+/* task and error reporting */
 enum task_t {
 	NO_INIT = 0,
 	IN_PROGRESS,
@@ -64,6 +65,7 @@ enum dir_r {
 	READING,
 };
 
+/* every transfer is considered as the message */
 struct msg_t {
 	enum dir_r dir;
 	uint8_t *data;
@@ -71,7 +73,10 @@ struct msg_t {
 	struct msg_t *next;
 };
 
+/* we support I2C1 and I2C2 only for now */
 static I2C_TypeDef *i2c_s[] = { I2C1, I2C2 };
+
+/* isr will keep all transfer parameters per bus */
 static struct isr_t {
 	I2C_TypeDef *i2c;
 	void (*handler)(void *data, uint8_t err);
@@ -81,65 +86,80 @@ static struct isr_t {
 	struct msg_t *msg;
 	DMA_Channel_TypeDef *tx_dma;
 	DMA_Channel_TypeDef *rx_dma;
+	bool is_rx;
 } isrs[2] = { 0 };
 
+/* set start bit macro */
 static inline void start(I2C_TypeDef *i2c)
 {
+	/* TODO: remove this STOP bit polling! */
+	//while (i2c->CR1 & I2C_CR1_STOP) { }
 	i2c->CR1 |= I2C_CR1_START;
 }
 
+/* set stop bit macro */
 static inline void stop(I2C_TypeDef *i2c)
 {
 	i2c->CR1 |= I2C_CR1_STOP;
-	i2c->CR1 &= ~I2C_CR1_STOP;
 }
 
+static void release_bus(struct isr_t *isr)
+{
+	stop(isr->i2c);
+	dma_release(isr->tx_dma);
+	dma_release(isr->rx_dma);
+	if (isr->handler)
+		isr->handler(isr->private_data, I2C_SUCCESS);
+	isr->task = DONE;
+}
+
+/* handles the messages */
 static void start_next_message(struct isr_t *isr)
 {
 	struct msg_t *m = isr->msg;
 	I2C_TypeDef *i2c = isr->i2c;
 
+	/*
+	 * Note: In transmitter mode bus is released from I2C interrupt.
+	 * In receiver mode we release the bus from DMA interrupt.
+	 */
+	if (!m) {
+		if (isr->is_rx)
+			release_bus(isr);
+		return;
+	}
+
 	if (m->dir == READING) {
-		start(i2c);
 		i2c->CR1 |= I2C_CR1_ACK;
-		i2c->DR = isr->addr | 1;
-		if (!m->next) /* last message */
-			i2c->CR2 |= I2C_CR2_LAST;
+		i2c->CR2 |= I2C_CR2_LAST;
 		isr->rx_dma->CMAR = (uint32_t)m->data;
 		isr->rx_dma->CPAR = (uint32_t)&i2c->DR;
 		isr->rx_dma->CNDTR = m->size;
 		isr->rx_dma->CCR = DMA_CCR1_EN | DMA_CCR1_TCIE | \
 			DMA_CCR1_MINC;
+		start(i2c);
 	} else {
 		i2c->CR1 &= ~I2C_CR1_ACK;
+		i2c->CR2 &= ~I2C_CR2_LAST;
 		isr->tx_dma->CMAR = (uint32_t)m->data;
 		isr->tx_dma->CPAR = (uint32_t)&i2c->DR;
 		isr->tx_dma->CNDTR = m->size;
 		isr->tx_dma->CCR = DMA_CCR1_EN | DMA_CCR1_TCIE | \
 			DMA_CCR1_MINC | DMA_CCR1_DIR;
 	}
-
-	isr->msg = m->next;
 }
 
+/* executed at the end of the dma transfer */
 static void dma_isr(void *data)
 {
 	struct isr_t *isr = data;
 	struct msg_t *m = isr->msg;
 
-	if (!m) {
-		dma_release(isr->tx_dma);
-		dma_release(isr->rx_dma);
-		stop(isr->i2c);
-		if (isr->handler)
-			isr->handler(isr->private_data, I2C_SUCCESS);
-		isr->task = DONE;
-		return;
-	}
-
+	isr->msg = m->next;
 	start_next_message(isr);
 }
 
+/* generic transfer function. Condigure the bus and create a messages list */
 static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 {
 	const uint8_t tx_ch[] = { 6, 4 };
@@ -167,6 +187,7 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	isr->task = IN_PROGRESS;
 	isr->addr = addr << 1;
 	isr->msg = *msg;
+	isr->is_rx = false;
 	if (!isr->msg)
 		return -EINVAL;
 
@@ -179,6 +200,8 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	m = *msg; /* build a linked list */
 	do {
 		msg++;
+		if (m->dir == READING)
+			isr->is_rx = true;
 		m->next = *msg;
 		m = m->next;
 	} while (m);
@@ -200,7 +223,7 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 }
 
 /* this ISR occures when address is send and initiate DMA transfer */
-static void isr_address(I2C_TypeDef *i2c, uint8_t i2c_num)
+static void isr_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
 	struct isr_t *isr = &isrs[i2c_num];
 	struct msg_t *m = isr->msg;
@@ -218,13 +241,15 @@ static void isr_address(I2C_TypeDef *i2c, uint8_t i2c_num)
 		return;
 	}
 
-	if (sr1 & I2C_SR1_ADDR) {
-		i2c->SR2;
-		//i2c->CR2 &= ~(I2C_CR2_ITERREN | I2C_CR2_ITEVTEN);
-		return;
-	}
+	/* clear addr flag */
+	i2c->SR2;
+
+	/* all data send, execute handler and clean up */
+	if (!m)
+		release_bus(isr);
 }
 
+/* this ISR occures when no acknowledges being received from slave */
 static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
 	struct isr_t *isr = &isrs[i2c_num];
@@ -243,6 +268,8 @@ static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 	i2c->SR1 = 0;
 	i2c->SR2 = 0;
 	isr->task = ERR_UNKNOWN;
+	dma_release(isr->tx_dma);
+	dma_release(isr->rx_dma);
 	stop(i2c);
 	if (isr->handler)
 			isr->handler(isr->private_data, ERR_UNKNOWN);
@@ -250,7 +277,7 @@ static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 
 void I2C1_EV_IRQHandler(void)
 {
-	isr_address(I2C1, 0);
+	isr_handler(I2C1, 0);
 }
 
 void I2C1_ER_IRQHandler(void)
@@ -260,7 +287,7 @@ void I2C1_ER_IRQHandler(void)
 
 void I2C2_EV_IRQHandler(void)
 {
-	isr_address(I2C2, 1);
+	isr_handler(I2C2, 1);
 }
 
 void I2C2_ER_IRQHandler(void)
@@ -383,3 +410,83 @@ int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 
 	return 0;
 }
+
+#ifdef FREERTOS
+
+static SemaphoreHandle_t mutex[2] = { 0 };
+
+struct rtos_task_t {
+	void *task_handler;
+	uint8_t err;
+};
+
+static void rtos_handler(void *task, uint8_t err)
+{
+	struct rtos_task_t *param = task;
+
+	param->err = err;
+	vTaskResume(param->task_handler);
+}
+
+int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
+	uint8_t *data, uint16_t size)
+{
+	int res;
+	struct rtos_task_t params;
+
+	struct msg_t msg[] = {
+		{ WRITING, &reg, 1 },
+		{ WRITING, data, size },
+	};
+	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
+
+	if (!mutex[i2c_num - 1])
+		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
+
+	params.task_handler = xTaskGetCurrentTaskHandle();
+
+	i2c_set_handler(i2c_num, rtos_handler, &params);
+
+	//res = i2c_write_reg(i2c_num, addr, reg, data, size);
+	res = transfer(i2c_num, addr, msgs);
+
+	vTaskSuspend(params.task_handler);
+
+	xSemaphoreGive(mutex[i2c_num - 1]);
+
+	if (res)
+		return res;
+
+	return -params.err;
+}
+
+int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
+	uint8_t *data, uint16_t size)
+{
+	int res;
+	struct rtos_task_t params;
+
+	if (!mutex[i2c_num - 1])
+		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
+
+	params.task_handler = xTaskGetCurrentTaskHandle();
+
+	i2c_set_handler(i2c_num, rtos_handler, &params);
+
+	res = i2c_read_reg(i2c_num, addr, reg, data, size);
+
+	vTaskSuspend(params.task_handler);
+
+	xSemaphoreGive(mutex[i2c_num - 1]);
+
+	if (res)
+		return res;
+
+	return -params.err;
+}
+
+#endif /* FREERTOS */

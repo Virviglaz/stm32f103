@@ -129,6 +129,34 @@ int i2c_read(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
 int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 	void *private_data);
 
+#ifdef FREERTOS
+
+/**
+  * @brief  Transfer the data buffer to reg using RTOS
+  * @param  i2c_num: can be 1 or 2 to select the I2C peripheral.
+  * @param  addr: device i2c address
+  * @param  data: pointer to buffer
+  * @param  size: amount of bytes to transfer
+  *
+  * @retval 0 if success, I2C_ERR_NOACK if device not responds
+  */
+int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
+	uint8_t *data, uint16_t size);
+
+/**
+  * @brief  Receives the data to buffer starting from reg using RTOS
+  * @param  i2c_num: can be 1 or 2 to select the I2C peripheral.
+  * @param  addr: device i2c address
+  * @param  data: pointer to buffer
+  * @param  size: amount of bytes to receive
+  *
+  * @retval 0 if success, I2C_ERR_NOACK if device not responds
+  */
+int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
+	uint8_t *data, uint16_t size);
+
+#endif /* FREERTOS */
+
 #ifdef __cplusplus
 }
 #endif
