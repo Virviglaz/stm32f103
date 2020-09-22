@@ -53,16 +53,76 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
-#include "rtos.h"
 
+/**
+  * @brief  Initialize the timer.
+  * @param  tim: Number of timer.
+  * @param  prc: Prescaller value.
+  * @param  period: period value.
+  *
+  * @retval 0 if success.
+  */
 int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
+
+/**
+  * @brief  Start the timer.
+  * @param  tim: Number of timer.
+  * @param  state: enable/disable the timer.
+  *
+  * @retval 0 if success.
+  */
 int timer_enable(uint8_t tim, bool state);
+
+/**
+  * @brief  Set timer period.
+  * @param  tim: Number of timer.
+  * @param  period: New period value.
+  *
+  * @retval 0 if success.
+  */
 int timer_set_period(uint8_t tim, uint16_t period);
+
+/**
+  * @brief  Enable PWM output.
+  * @param  tim: Number of timer.
+  * @param  ch: Channel number 1..4.
+  * @param  duty: duty cycle value.
+  *
+  * @note   GPIO have to be initialized separatly
+  *
+  * @retval 0 if success.
+  */
 int timer_pwm_enable(uint8_t tim, uint8_t ch, u16 duty);
+
+/**
+  * @brief  Set PWM duty.
+  * @param  tim: Number of timer.
+  * @param  ch: Channel number 1..4.
+  * @param  duty: duty cycle value.
+  *
+  * @retval 0 if success.
+  */
 int timer_pwm_set_duty(uint8_t tim, uint8_t ch, u16 duty);
+
+/**
+  * @brief  Enable timer interrupt.
+  * @param  tim: Number of timer.
+  * @param  handler: pointer to interrupt function.
+  * @param  data: pointer to private data.
+  *
+  * @retval 0 if success.
+  */
 int timer_enable_interrupt(uint8_t tim,
 	void (*handler)(uint8_t tim, void *data), void *data);
-int set_pwm_duty(uint8_t tim, uint16_t period);
+
+/**
+  * @brief  Set timer period.
+  * @param  tim: Number of timer.
+  * @param  period: period value.
+  *
+  * @retval 0 if success.
+  */
+int set_timer_period(uint8_t tim, uint16_t period);
 
 #ifdef __cplusplus
 }

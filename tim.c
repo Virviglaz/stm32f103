@@ -319,7 +319,7 @@ int timer_enable_interrupt(uint8_t tim,
 	return 0;
 }
 
-int set_pwm_duty(uint8_t tim, uint16_t period)
+int set_timer_period(uint8_t tim, uint16_t period)
 {
 	TIM_TypeDef *base = get_tim_base(tim);
 
