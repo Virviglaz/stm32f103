@@ -46,15 +46,18 @@
 #include <stdbool.h>
 #include <errno.h>
 
+struct adc_params_t {
+	void (*handler)(uint8_t adc_num, uint16_t value);
+	bool init_done;
+};
+
 #if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
 	!defined (STM32F10X_HD_VL)
-static bool init_done[2] = { false, false };
-static struct {
-	void (*handler)(uint8_t adc_num, uint16_t value);
-} adc_isr[2];
+#define ADC_DEV(x)		((x == 1) ? ADC1 : ADC2)
+struct adc_params_t adc_params[2] = { 0 };
 #else
-static bool init_done = false;
-void (*handler)(uint8_t adc_num, uint16_t value);
+#define ADC_DEV(x)		ADC1
+struct adc_params_t adc_params[1] = { 0 };
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 
 static inline void calibrate(ADC_TypeDef *adc)
@@ -65,44 +68,35 @@ static inline void calibrate(ADC_TypeDef *adc)
 	while (adc->CR2 & ADC_CR2_CAL);
 }
 
-static void init(ADC_TypeDef *adc)
+static inline void init_rcc(uint8_t adc_num)
 {
 #if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
 	!defined (STM32F10X_HD_VL)
-	if (adc == ADC1)
+	if (adc_num == 0)
 		RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 	else
 		RCC->APB2ENR |= RCC_APB2ENR_ADC2EN;
 #else
 	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
-
-	//adc->CR2 = ADC_CR2_ADON;
-	calibrate(adc);
 }
 
-int adc_init(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
+int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 {
-#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
-	!defined (STM32F10X_HD_VL)
-	ADC_TypeDef *adc = adc_num == 1 ? ADC1 : ADC2;
-
-	if (adc_num < 1 || adc_num > 2)
+	ADC_TypeDef *adc = ADC_DEV(adc_num);
+	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
 		return -EINVAL;
 
-	if (!init_done[adc_num - 1]) {
-		init(adc);
-		init_done[adc_num - 1] = true;
-	}
-#else
-	ADC_TypeDef *adc = ADC1;
-	(void)adc_num;
+	/* adc index starting from 0 */
+	adc_num--;
 
-	if (!init_done) {
-		init(adc);
-		init_done = true;
+	if (adc_params[adc_num].init_done) {
+		init_rcc(adc_num);
+		calibrate(adc);
+		adc_params[adc_num].init_done = true;
+		NVIC_EnableIRQ(ADC1_2_IRQn);
 	}
-#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
+
 	if (channel > 17)
 		return -EINVAL;
 
@@ -115,57 +109,52 @@ int adc_init(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 
 	adc->SQR1 = 0;
 	adc->SQR3 = channel;
-	adc_start(adc_num);
+	adc->CR2 = ADC_CR2_ADON;
 
 	return 0;
 }
 
 int adc_read(uint8_t adc_num)
 {
-#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
-	!defined (STM32F10X_HD_VL)
-	ADC_TypeDef *adc = adc_num == 1 ? ADC1 : ADC2;
-	if (adc_num < 1 || adc_num > 2)
+	ADC_TypeDef *adc = ADC_DEV(adc_num);
+
+	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
 		return -EINVAL;
-#else
-	ADC_TypeDef *adc = ADC1;
-	(void)adc_num;
-#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 
 	if (!(adc->SR & ADC_SR_EOC))
 		return -EINVAL;
+
 	return (int)adc->DR;
 }
 
 int adc_single_conversion(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 {
+	ADC_TypeDef *adc = ADC_DEV(adc_num);
 	int res;
 
-	res = adc_init(adc_num, channel, sample_rate);
+	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+		return -EINVAL;
+
+	res = adc_start(adc_num, channel, sample_rate);
 	if (res)
 		return res;
 
-	do {
-		res = adc_read(adc_num);
-	} while (res < 0);
+	while (!(adc->SR & ADC_SR_EOC)) { }
 
-	return res;
+	return (int)adc->DR;
 }
 
 void adc_enable_interrupt(uint8_t adc_num,
 	void (*handler)(uint8_t adc_num, uint16_t value))
 {
-#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
-	!defined (STM32F10X_HD_VL)
-	ADC_TypeDef *adc = adc_num == 1 ? ADC1 : ADC2;
+	ADC_TypeDef *adc = ADC_DEV(adc_num);
 
-	if (adc_num < 1 || adc_num > 2)
+	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
 		return;
-	adc_isr[adc_num - 1].handler = handler;
+
+	adc_params[adc_num - 1].handler = handler;
+
 	adc->CR1 = ADC_CR1_EOCIE;
-	NVIC_EnableIRQ(ADC1_2_IRQn);
-#else
-#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 }
 
 #if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
@@ -173,9 +162,9 @@ void adc_enable_interrupt(uint8_t adc_num,
 void ADC1_2_IRQHandler(void)
 {
 	if (ADC1->SR & ADC_SR_EOC)
-		adc_isr[0].handler(1, ADC1->DR);
+		adc_params[0].handler(1, ADC1->DR);
 	if (ADC2->SR & ADC_SR_EOC)
-		adc_isr[1].handler(2, ADC2->DR);
+		adc_params[1].handler(2, ADC2->DR);
 }
 #else
 void ADC1_IRQn(void)
@@ -183,3 +172,55 @@ void ADC1_IRQn(void)
 	handler(1, ADC1->DR);
 }
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
+
+#ifdef FREERTOS
+
+struct param_t {
+	TaskHandle_t handle;
+	SemaphoreHandle_t mutex;
+	uint16_t value;
+};
+
+#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
+	!defined (STM32F10X_HD_VL)
+static struct param_t params[2] = { 0 };
+#else
+static struct param_t params[1] = { 0 };
+#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
+
+static void rtos_handler(uint8_t adc_num, uint16_t value)
+{
+	struct param_t *par = &params[adc_num - 1];
+
+	par->value = value;
+
+	portYIELD_FROM_ISR(xTaskResumeFromISR(par->handle));
+}
+
+int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel)
+{
+	struct param_t *par;
+
+	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+		return -EINVAL;
+
+	par = &params[adc_num - 1];
+
+	if (!par->mutex)
+		par->mutex = xSemaphoreCreateMutex();
+
+	par->handle = xTaskGetCurrentTaskHandle();
+
+	xSemaphoreTake(par->mutex, portMAX_DELAY);
+
+	adc_start(adc_num, channel, 7);
+	adc_enable_interrupt(adc_num, rtos_handler);
+
+	vTaskSuspend(par->handle);
+
+	xSemaphoreGive(par->mutex);
+
+	return (int)par->value;
+}
+
+#endif /* FREERTOS */

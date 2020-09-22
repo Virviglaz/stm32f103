@@ -53,26 +53,57 @@
 #include <stdint.h>
 #include "rtos.h"
 
-static inline void adc_start(uint8_t adc_num)
-{
-#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
-	!defined (STM32F10X_HD_VL)
-	if (adc_num == 1)
-		ADC1->CR2 = ADC_CR2_ADON;
-	else
-		ADC2->CR2 = ADC_CR2_ADON;
-#else
-	(void)adc_num;
-	ADC1->CR2 = ADC_CR2_ADON;
-#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
-}	
+/**
+  * @brief  Init ADC and start the conversion.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  channel: Channel number 0..16.
+  * @param  sample_rate: Sampling factor 0..7.
+  *
+  * @retval 0 if success.
+  */
+int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate);
 
-int adc_init(uint8_t adc_num, uint8_t channel, uint8_t sample_rate);
+/**
+  * @brief  Wait for end of conversion and get a result.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  *
+  * @retval 12 bit raw adc value or negative error value.
+  */
 int adc_read(uint8_t adc_num);
+
+/**
+  * @brief  Perform single conversion.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  channel: Channel number 0..16.
+  * @param  sample_rate: Sampling factor 0..7.
+  *
+  * @retval 12 bit raw adc value or negative error value.
+  */
 int adc_single_conversion(uint8_t adc_num, uint8_t channel,
 	uint8_t sample_rate);
+
+/**
+  * @brief  Enable interrupt.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  handler: Pointer to function that will be executed in ISR.
+  *
+  * @retval 12 bit raw adc value or negative error value.
+  */
 void adc_enable_interrupt(uint8_t adc_num,
 	void (*handler)(uint8_t adc_num, uint16_t value));
+
+#ifdef FREERTOS
+
+/**
+  * @brief  Perform single conversion using FreeRTOS.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  channel: Channel number 0..16.
+  *
+  * @retval 12 bit raw adc value or negative error value.
+  */
+int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel);
+
+#endif /* FREERTOS */
 
 #ifdef __cplusplus
 }
