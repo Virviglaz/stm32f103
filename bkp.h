@@ -51,9 +51,22 @@
 
 #include "stm32f10x.h"
 #include <stdint.h>
-#include "rtos.h"
 
+/**
+  * @brief  Write data to backup register.
+  * @param  reg_num: 0..41 register number.
+  * @param  value: Data to save.
+  *
+  * @retval None.
+  */
 void bkp_write(uint8_t reg_num, uint16_t value);
+
+/**
+  * @brief  Read data from backup register.
+  * @param  reg_num: 0..41 register number.
+  *
+  * @retval Data from backup register.
+  */
 uint16_t bkp_read(uint8_t reg_num);
 
 #ifdef __cplusplus

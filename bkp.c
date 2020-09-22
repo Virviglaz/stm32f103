@@ -44,7 +44,7 @@
 
 #include "bkp.h"
 
-static uint16_t *get_dr_reg(uint8_t n)
+static const uint16_t *get_dr_reg(uint8_t n)
 {
 	static const uint16_t *dr_regs[] = {
 		(void *)&BKP->DR1,
@@ -98,7 +98,7 @@ static uint16_t *get_dr_reg(uint8_t n)
 
 void bkp_write(uint8_t reg_num, uint16_t value)
 {
-	uint16_t *reg = get_dr_reg(reg_num - 1);
+	uint16_t *reg = (uint16_t *)get_dr_reg(reg_num - 1);
 
 	PWR->CR |= PWR_CR_DBP;
 
@@ -110,7 +110,7 @@ void bkp_write(uint8_t reg_num, uint16_t value)
 
 uint16_t bkp_read(uint8_t reg_num)
 {
-	uint16_t *reg = get_dr_reg(reg_num - 1);
+	uint16_t *reg = (uint16_t *)get_dr_reg(reg_num - 1);
 
 	return reg ? *reg : 0;
 }
