@@ -255,24 +255,19 @@ static void isr_err_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 	struct isr_t *isr = &isrs[i2c_num];
 	uint16_t sr1 = i2c->SR1;
 
-	if (sr1 & I2C_SR1_AF) {
-		i2c->SR1 = 0;
-		isr->task = ERR_NOACK;
-		stop(i2c);
-		if (isr->handler)
-			isr->handler(isr->private_data, I2C_ERR_NOACK);
-		return;
-	}
-
-	/* rest of the errors */
 	i2c->SR1 = 0;
 	i2c->SR2 = 0;
-	isr->task = ERR_UNKNOWN;
 	dma_release(isr->tx_dma);
 	dma_release(isr->rx_dma);
+
+	if (sr1 & I2C_SR1_AF)
+		isr->task = ERR_NOACK;
+	else
+		isr->task = ERR_UNKNOWN;
+
 	stop(i2c);
 	if (isr->handler)
-			isr->handler(isr->private_data, ERR_UNKNOWN);
+		isr->handler(isr->private_data, isr->task);
 }
 
 void I2C1_EV_IRQHandler(void)
