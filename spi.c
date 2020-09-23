@@ -164,8 +164,11 @@ static int transfer(uint8_t spi_num, struct msg_t **msg,
 	isr->dma_tx = get_dma_ch(tx_ch[spi_num], dma_isr, isr);
 	isr->dma_rx = get_dma_ch(rx_ch[spi_num], dma_isr, isr);
 
-	if (!isr->dma_tx || !isr->dma_rx)
+	if (!isr->dma_tx || !isr->dma_rx) {
+		dma_release(isr->dma_tx);
+		dma_release(isr->dma_rx);
 		return -EILSEQ;
+	}
 
 	isr->spi_num = spi_num;
 	isr->done = false;

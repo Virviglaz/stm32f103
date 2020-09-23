@@ -194,8 +194,11 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	isr->tx_dma = get_dma_ch(tx_ch[i2c_num], dma_isr, isr);
 	isr->rx_dma = get_dma_ch(rx_ch[i2c_num], dma_isr, isr);
 
-	if (!isr->tx_dma || !isr->rx_dma)
+	if (!isr->tx_dma || !isr->rx_dma) {
+		dma_release(isr->tx_dma);
+		dma_release(isr->rx_dma);
 		return -EINVAL;
+	}
 
 	m = *msg; /* build a linked list */
 	do {

@@ -280,9 +280,9 @@ static SemaphoreHandle_t tx_mutex[3] = { 0 };
 static SemaphoreHandle_t rx_mutex[3] = { 0 };
 static uint16_t bytes_received[3];
 
-static void rtos_tx_handler(void *data)
+static void rtos_tx_handler(void *private_data)
 {
-	xSemaphoreGiveFromISR(data, NULL);
+	rtos_schedule_isr(private_data);
 }
 
 static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
@@ -295,13 +295,19 @@ static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
 
 void uart_send_data_rtos(uint8_t uart_num, char *buf, uint16_t size)
 {
+	TaskHandle_t handle;
+
 	if (!tx_mutex[uart_num - 1])
 		tx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
 
+	handle = xTaskGetCurrentTaskHandle();
+
 	xSemaphoreTake(tx_mutex[uart_num - 1], portMAX_DELAY);
 
-	uart_send_data(uart_num, buf, size,
-		rtos_tx_handler, tx_mutex[uart_num - 1]);
+	if (!uart_send_data(uart_num, buf, size, rtos_tx_handler, handle))
+		vTaskSuspend(handle);
+
+	xSemaphoreGive(tx_mutex[uart_num - 1]);
 }
 
 void uart_send_string_rtos(uint8_t uart_num, char *string)

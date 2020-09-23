@@ -66,10 +66,11 @@
 
 /**
   * @brief  Initialize deferred interrupt task.
+  * @param  err_handler: optional pointer to error handler function.
   *
   * @retval None.
   */
-void rtos_deferred_isr_init(void);
+void rtos_deferred_isr_init(void (*err_handler)(const char *err));
 
 /**
   * @brief  Add deferred interrupt to queue.
