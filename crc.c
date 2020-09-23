@@ -115,7 +115,7 @@ static void rtos_handler(void *data, uint32_t res)
 
 	param->crc32 = res;
 
-	portYIELD_FROM_ISR(xTaskResumeFromISR(param->handle));
+	rtos_schedule_isr(param->handle);
 }
 
 uint32_t crc32rtos(uint8_t *buf, uint16_t size)
