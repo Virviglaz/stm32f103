@@ -81,6 +81,22 @@ static inline void init_rcc(uint8_t adc_num)
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 }
 
+static void init(uint8_t adc_num, ADC_TypeDef *adc)
+{
+	if (adc_params[adc_num].init_done)
+		return;
+
+	init_rcc(adc_num);
+	calibrate(adc);
+	adc_params[adc_num].init_done = true;
+#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
+	!defined (STM32F10X_HD_VL)
+	NVIC_EnableIRQ(ADC1_2_IRQn);
+#else
+	NVIC_EnableIRQ(ADC1_IRQn)
+#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
+}
+
 int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 {
 	ADC_TypeDef *adc = ADC_DEV(adc_num);
@@ -89,13 +105,9 @@ int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 
 	/* adc index starting from 0 */
 	adc_num--;
+	adc->CR2 = 0;
 
-	if (adc_params[adc_num].init_done) {
-		init_rcc(adc_num);
-		calibrate(adc);
-		adc_params[adc_num].init_done = true;
-		NVIC_EnableIRQ(ADC1_2_IRQn);
-	}
+	init(adc_num, adc);
 
 	if (channel > 17)
 		return -EINVAL;
@@ -109,6 +121,7 @@ int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 
 	adc->SQR1 = 0;
 	adc->SQR3 = channel;
+	adc->CR2 = ADC_CR2_ADON;
 	adc->CR2 = ADC_CR2_ADON;
 
 	return 0;
@@ -152,7 +165,11 @@ void adc_enable_interrupt(uint8_t adc_num,
 	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
 		return;
 
-	adc_params[adc_num - 1].handler = handler;
+	adc_num--;
+
+	init(adc_num, adc);
+
+	adc_params[adc_num].handler = handler;
 
 	adc->CR1 = ADC_CR1_EOCIE;
 }
@@ -161,14 +178,21 @@ void adc_enable_interrupt(uint8_t adc_num,
 	!defined (STM32F10X_HD_VL)
 void ADC1_2_IRQHandler(void)
 {
-	if (ADC1->SR & ADC_SR_EOC)
+	if (ADC1->SR & ADC_SR_EOC) {
+		ADC1->CR2 = 0;
 		adc_params[0].handler(1, ADC1->DR);
-	if (ADC2->SR & ADC_SR_EOC)
+		return;
+	}
+	if (ADC2->SR & ADC_SR_EOC) {
+		ADC2->CR2 = 0;
 		adc_params[1].handler(2, ADC2->DR);
+		return;
+	}
 }
 #else
 void ADC1_IRQn(void)
 {
+	ADC1->CR2 = 0;
 	handler(1, ADC1->DR);
 }
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
@@ -194,7 +218,7 @@ static void rtos_handler(uint8_t adc_num, uint16_t value)
 
 	par->value = value;
 
-	portYIELD_FROM_ISR(xTaskResumeFromISR(par->handle));
+	rtos_schedule_isr(par->handle);
 }
 
 int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel)
@@ -213,8 +237,8 @@ int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel)
 
 	xSemaphoreTake(par->mutex, portMAX_DELAY);
 
-	adc_start(adc_num, channel, 7);
 	adc_enable_interrupt(adc_num, rtos_handler);
+	adc_start(adc_num, channel, 7);
 
 	vTaskSuspend(par->handle);
 

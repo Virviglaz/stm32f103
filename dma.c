@@ -189,7 +189,7 @@ static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
 
 static void handler(void *data)
 {
-	portYIELD_FROM_ISR(xTaskResumeFromISR(data));
+	rtos_schedule_isr(data);
 }
 
 static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
@@ -203,12 +203,13 @@ static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
 
 	xSemaphoreTake(mutex, portMAX_DELAY);
 
+	handle = xTaskGetCurrentTaskHandle();
+
 	ch = get_dma_ch(0, handler, handle);
 
 	if (!ch) /* failed to get channel, use cpu instead */
 		memcpy(dst, src, size);
 	else {
-		handle = xTaskGetCurrentTaskHandle();
 		ch->CNDTR = size;
 		ch->CMAR = (uint32_t)src;
 		ch->CPAR = (uint32_t)dst;

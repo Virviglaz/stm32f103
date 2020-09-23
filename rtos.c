@@ -42,42 +42,47 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-/* global include to enable FreeRTOS support */
 #ifdef FREERTOS
 
-#ifndef __FREERTOS__
-#define __FREERTOS__
+#include "rtos.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
+/*
+ * Centralised Deferred Interrupt Handling
+ * is so called because each interrupt that uses this method
+ * executes in the context of the same RTOS daemon task.
+ * https://www.freertos.org/deferred_interrupt_processing.html
+ */
 
-#if defined(malloc) || defined(free)
-#error "Don't include stdlib.h!"
-#endif
+#define QUEUE_SIZE		10
 
-#define malloc(x)			pvPortMalloc(x)
-#define free(x)				vPortFree(x)
-#define free_mem()			xPortGetFreeHeapSize()
+static QueueHandle_t isr_queue = 0;
 
-#define delay(x)			vTaskDelay(x)
+static void isr_daemon_task(void *par)
+{
+	while (1) {
+		TaskHandle_t handle;
+		if (xQueueReceive(isr_queue, &handle, portMAX_DELAY) == pdPASS)
+			vTaskResume(handle);
+	}
+}
 
-#define MIN_STACK_SIZE			configMINIMAL_STACK_SIZE
+void rtos_deferred_isr_init(void)
+{
+	if (!isr_queue) {
+		isr_queue = xQueueCreate(QUEUE_SIZE, sizeof(TaskHandle_t));
+		xTaskCreate(isr_daemon_task, "isr", MIN_STACK_SIZE, 0, \
+			tskIDLE_PRIORITY, 0);
 
-/**
-  * @brief  Initialize deferred interrupt task.
-  *
-  * @retval None.
-  */
-void rtos_deferred_isr_init(void);
+	}
+}
 
-/**
-  * @brief  Add deferred interrupt to queue.
-  * @param  handle: pointer to task handle.
-  *
-  * @retval None.
-  */
-void rtos_schedule_isr(TaskHandle_t handle);
+void rtos_schedule_isr(TaskHandle_t handle)
+{
+	BaseType_t xHigherPriorityTaskWoken;
 
-#endif /* __FREERTOS__ */
+	xQueueSendFromISR(isr_queue, &handle, &xHigherPriorityTaskWoken);
+
+	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
 #endif /* FREERTOS */

@@ -416,7 +416,7 @@ int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 static SemaphoreHandle_t mutex[2] = { 0 };
 
 struct rtos_task_t {
-	void *task_handler;
+	void *task_handle;
 	uint8_t err;
 };
 
@@ -425,7 +425,8 @@ static void rtos_handler(void *task, uint8_t err)
 	struct rtos_task_t *param = task;
 
 	param->err = err;
-	portYIELD_FROM_ISR(xTaskResumeFromISR(param->task_handler));
+
+	rtos_schedule_isr(param->task_handle);
 }
 
 int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
@@ -445,13 +446,13 @@ int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 
 	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
 
-	params.task_handler = xTaskGetCurrentTaskHandle();
+	params.task_handle = xTaskGetCurrentTaskHandle();
 
 	i2c_set_handler(i2c_num, rtos_handler, &params);
 
 	res = transfer(i2c_num, addr, msgs);
 	if (!res)
-		vTaskSuspend(params.task_handler);
+		vTaskSuspend(params.task_handle);
 
 	xSemaphoreGive(mutex[i2c_num - 1]);
 
@@ -478,13 +479,13 @@ int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 
 	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
 
-	params.task_handler = xTaskGetCurrentTaskHandle();
+	params.task_handle = xTaskGetCurrentTaskHandle();
 
 	i2c_set_handler(i2c_num, rtos_handler, &params);
 
 	res = transfer(i2c_num, addr, msgs);
 	if (!res)
-		vTaskSuspend(params.task_handler);
+		vTaskSuspend(params.task_handle);
 
 	xSemaphoreGive(mutex[i2c_num - 1]);
 
