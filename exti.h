@@ -52,6 +52,7 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "rtos.h"
 
 /**
   * @brief  Initialize EXTI and install the interrupt handler.
@@ -76,6 +77,22 @@ int add_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin,
   * @retval 0 if success.
   */
 int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin);
+
+#ifdef FREERTOS
+
+/**
+  * @brief  Block the task until pinchange interrupt appears.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pin: Pin number for pin change interrupt.
+  * @param  rising: Enable rising edge detection.
+  * @param  falling: Enable falling edge detection.
+  *
+  * @retval 0 if success.
+  */
+int wait_for_pinchange_rtos(GPIO_TypeDef *gpio, uint16_t pin,
+	bool rising, bool falling);
+
+#endif /* FREERTOS */
 
 #ifdef __cplusplus
 }

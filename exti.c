@@ -51,16 +51,13 @@
 	AFIO->EXTICR[pin >> 2] |= line << ((pin % 4) << 2)
 #define DISABLE_EXTI_LINE(pin, line) \
 	AFIO->EXTICR[pin >> 2] &= ~(line << ((pin % 4) << 2))
+#define GPIO_TO_LINE_INDEX(gpio) \
+	(((uint32_t)gpio - (uint32_t)GPIOA) >> 10)
 
 static struct exit_isr_t {
 	void (*handler)(void *private_data);
 	void *data;
 } isrs[NOF_EXTI_LINES];
-
-static uint8_t gpio_to_index(GPIO_TypeDef *gpio)
-{
-	return (uint8_t)(((uint32_t)gpio - (uint32_t)GPIOA) >> 10);
-}
 
 static inline int set_pin_int(GPIO_TypeDef *gpio, uint8_t pin,
 	void (*handler)(void *private_data),
@@ -73,7 +70,7 @@ static inline int set_pin_int(GPIO_TypeDef *gpio, uint8_t pin,
 	if (pin >= ARRAY_SIZE(isrs))
 		return -EINVAL;
 
-	line = gpio_to_index(gpio);
+	line = GPIO_TO_LINE_INDEX(gpio);
 	isr = &isrs[pin];
 
 	RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
@@ -117,7 +114,7 @@ static inline int clr_pin_int(GPIO_TypeDef *gpio, uint16_t pin)
 	if (pin >= ARRAY_SIZE(isrs))
 		return -EINVAL;
 
-	line = gpio_to_index(gpio);
+	line = GPIO_TO_LINE_INDEX(gpio);
 	isr = &isrs[pin];
 
 	isr->handler = 0;
@@ -165,6 +162,41 @@ int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin)
 		}
 	return ret;
 }
+
+#ifdef FREERTOS
+
+static void rtos_handler(void *data)
+{
+	rtos_schedule_isr(data);
+}
+
+int wait_for_pinchange_rtos(GPIO_TypeDef *gpio, uint16_t pin,
+	bool rising, bool falling)
+{
+	static SemaphoreHandle_t mutex = 0;
+	int ret;
+	TaskHandle_t handle;
+
+	if (!mutex)
+		mutex = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex, portMAX_DELAY);
+
+	handle = xTaskGetCurrentTaskHandle();
+
+	ret = add_pinchange_interrupt(gpio, pin, rtos_handler, handle,
+		rising, falling);
+	if (!ret)
+		vTaskSuspend(handle);
+
+	remove_pinchange_interrupt(gpio, pin);
+
+	xSemaphoreGive(mutex);
+
+	return ret;
+}
+
+#endif /* FREERTOS */
 
 static void isr_handler()
 {
