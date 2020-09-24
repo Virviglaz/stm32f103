@@ -41,7 +41,7 @@
  * Contact Information:
  * Pavel Nadein <pavelnadein@gmail.com>
  */
- 
+
 #ifndef __UART_H__
 #define __UART_H__
 
@@ -190,4 +190,3 @@ uint16_t uart_receive_rtos(uint8_t uart_num, char *buf, uint16_t size);
 #endif
 
 #endif /* __UART_H__ */
-

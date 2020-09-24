@@ -42,82 +42,43 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
-#include "gpio.h"
+#ifndef __EXTI_H__
+#define __EXTI_H__
 
-static void rcc_enable(GPIO_TypeDef *gpio)
-{
-	if (gpio == GPIOA)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;
-	else if (gpio == GPIOB)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
-	else if (gpio == GPIOC)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
-	else if (gpio == GPIOD)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPDEN;
-	else if (gpio == GPIOE)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPEEN;
-#if defined (STM32F10X_HD) || defined (STM32F10X_XL)
-	else if (gpio == GPIOF)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPFEN;
-	else if (gpio == GPIOG)
-		RCC->APB2ENR |= RCC_APB2ENR_IOPGEN;
-#endif /* STM32F10X_HD STM32F10X_XL */
+#ifdef __cplusplus
+ extern "C" {
+#endif
+
+#include <stm32f10x.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+/**
+  * @brief  Initialize EXTI and install the interrupt handler.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pin: Pin number for pin change interrupt.
+  * @param  handler: Pointer to handler function.
+  * @param  data: Pointer to private data if needed.
+  * @param  rising: Enable rising edge detection.
+  * @param  falling: Enable falling edge detection.
+  *
+  * @retval 0 if success.
+  */
+int add_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin,
+	void (*handler)(void *private_data),
+		void *data, bool rising, bool falling);
+
+/**
+  * @brief  Disable EXTI and remove the interrupt handler.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pin: Pin number for pin change interrupt.
+  *
+  * @retval 0 if success.
+  */
+int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin);
+
+#ifdef __cplusplus
 }
+#endif
 
-static void set_mode(GPIO_TypeDef *gpio, uint8_t pin, uint8_t mode, uint8_t cnf)
-{
-	uint8_t cr;
-
-	cr = ((uint8_t)cnf << 2) | (uint8_t)mode;
-	pin = pin << 2;
-
-	if (pin < 32) {
-		gpio->CRL &= ~(0xF << pin);
-		gpio->CRL |= cr << pin;
-	} else {
-		pin -= 32;
-		gpio->CRH &= ~(0xF << pin);
-		gpio->CRH |= cr << pin;
-	}
-}
-
-void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
-	enum output_mode_t mode, enum freq_gpio_t freq)
-{
-	uint8_t i;
-
-	rcc_enable(gpio);
-	if (mode >= PUSHPULL_ALT_OUTPUT)
-		RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
-
-	for (i = 0; i != 16; i++)
-		if (pinmask & BIT(i))
-			set_mode(gpio, i, (uint8_t)freq, (uint8_t)mode);
-}
-
-void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
-	enum input_mode_t mode)
-{
-	uint8_t i;
-
-	rcc_enable(gpio);
-
-	for (i = 0; i != 16; i++) {
-		uint16_t pin_bit = BIT(i);
-		if (pinmask & pin_bit) {
-			if (mode > DIGITAL_INPUT) {
-				set_mode(gpio, i, 0, (uint8_t)PULL_UP_INPUT);
-				if (mode == PULL_UP_INPUT)
-					gpio_set(gpio, pin_bit);
-				else
-					gpio_reset(gpio, pin_bit);
-			} else
-				set_mode(gpio, i, 0, (uint8_t)mode);
-		}
-	}
-}
-
-void gpio_set_state(GPIO_TypeDef *gpio, uint16_t pinmask, bool state)
-{
-	state ? gpio_set(gpio, pinmask) : gpio_reset(gpio, pinmask);
-}
+#endif /* __EXTI_H__ */

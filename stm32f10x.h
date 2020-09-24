@@ -54,8 +54,13 @@
  extern "C" {
 #endif 
 
+#ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a)		(sizeof(a) / sizeof(*a))
+#endif
+
+#ifndef BIT
 #define BIT(a)			(1 << a)
+#endif
 
 /** @addtogroup Library_configuration_section
   * @{
