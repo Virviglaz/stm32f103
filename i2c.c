@@ -51,6 +51,8 @@
 #define I2C_FAST_FREQ	400000
 #define I2C_NORM_FREQ	100000
 
+#define VALIDATE_I2C()	if (!i2c_num || i2c_num > 2) return -EINVAL;
+
 /* task and error reporting */
 enum task_t {
 	NO_INIT = 0,
@@ -60,14 +62,14 @@ enum task_t {
 	ERR_UNKNOWN,
 };
 
-enum dir_r {
+enum dir_t {
 	WRITING,
 	READING,
 };
 
 /* every transfer is considered as the message */
 struct msg_t {
-	enum dir_r dir;
+	enum dir_t dir;
 	uint8_t *data;
 	uint16_t size;
 	struct msg_t *next;
@@ -137,7 +139,6 @@ static void start_next_message(struct isr_t *isr)
 		isr->rx_dma->CNDTR = m->size;
 		isr->rx_dma->CCR = DMA_CCR1_EN | DMA_CCR1_TCIE | \
 			DMA_CCR1_MINC;
-		start(i2c);
 	} else {
 		i2c->CR1 &= ~I2C_CR1_ACK;
 		i2c->CR2 &= ~I2C_CR2_LAST;
@@ -168,9 +169,7 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	struct isr_t *isr;
 	struct msg_t *m;
 
-	if (!i2c_num || i2c_num > 2)
-		return -EINVAL;
-
+	VALIDATE_I2C();
 	i2c_num--;
 	i2c = i2c_s[i2c_num];
 	isr = &isrs[i2c_num];
@@ -225,6 +224,28 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	return isr->task == DONE ? 0 : -(int)isr->task;
 }
 
+static int send_message(uint8_t i2c_num, uint8_t addr, uint8_t *reg,
+	uint8_t reg_size, uint8_t *data, uint16_t size, enum dir_t dir)
+{
+	/* we use static variable to reduce the stack usage using RTOS */
+	static struct msg_t msg[2];
+	static struct msg_t *msgs[3];
+
+	msg[0].dir = WRITING;
+	msg[0].data = reg;
+	msg[0].size = reg_size;
+
+	msg[1].dir = dir;
+	msg[1].data = data;
+	msg[1].size = size;
+
+	msgs[0] = &msg[0];
+	msgs[1] = &msg[1];
+	msgs[2] = 0;
+
+	return transfer(i2c_num, addr, msgs);
+}
+
 /* this ISR occures when address is send and initiate DMA transfer */
 static void isr_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 {
@@ -236,14 +257,17 @@ static void isr_handler(I2C_TypeDef *i2c, uint8_t i2c_num)
 	if (sr1 & I2C_SR1_SB) {
 		if (m->dir == READING) {
 			i2c->CR1 |= I2C_CR1_ACK;
-			i2c->DR = isr[i2c_num].addr | 1;
+			i2c->DR = isr->addr | 1;
 		} else {
 			i2c->CR1 &= ~I2C_CR1_ACK;
-			i2c->DR = isr[i2c_num].addr;
+			i2c->DR = isr->addr;
 		}
 		return;
 	}
 
+	if (sr1 & I2C_SR1_TXE && m->dir == READING)
+		start(i2c);
+	
 	/* clear addr flag */
 	i2c->SR2;
 
@@ -300,8 +324,7 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 	struct system_clock_t *clock = get_clocks();
 	uint16_t freqrange;
 
-	if (!i2c_num || i2c_num > 2)
-		return -EINVAL;
+	VALIDATE_I2C();
 	i2c_num--;
 
 	switch (i2c_num) {
@@ -348,59 +371,58 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 	return 0;
 }
 
+/*
+ * this functions using consistently 2 messages transfer.
+ * first message holding the address of memory of register where
+ * access is planned. Then the next message is a buffer reading/writing
+ * followed by repeated start condition in case of reading.
+ */
 int i2c_write_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ WRITING, &reg, 1 },
-		{ WRITING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	return transfer(i2c_num, addr, msgs);
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, WRITING);
 }
 
 int i2c_read_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ WRITING, &reg, 1 },
-		{ READING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	return transfer(i2c_num, addr, msgs);
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, READING);
 }
 
-int i2c_write(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
+int i2c_write_eeprom_w(uint8_t i2c_num, uint8_t addr, uint16_t reg,
 	uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ WRITING, pos, pos_size },
-		{ WRITING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	return transfer(i2c_num, addr, msgs);
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, WRITING);
 }
 
-int i2c_read(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
+int i2c_read_eeprom_w(uint8_t i2c_num, uint8_t addr, uint16_t reg,
 	uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ WRITING, pos, pos_size },
-		{ READING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, READING);
+}
 
-	return transfer(i2c_num, addr, msgs);
+int i2c_write_eeprom_dw(uint8_t i2c_num, uint8_t addr, uint32_t reg,
+	uint8_t *data, uint16_t size)
+{
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, WRITING);
+}
+
+int i2c_read_eeprom_dw(uint8_t i2c_num, uint8_t addr, uint32_t reg,
+	uint8_t *data, uint16_t size)
+{
+	return send_message(i2c_num, addr, (void *)&reg, sizeof(reg),
+		data, size, READING);
 }
 
 int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 	void *private_data)
 {
-	if (!i2c_num || i2c_num > 2)
-		return -EINVAL;
+	VALIDATE_I2C();
 	i2c_num--;
 
 	isrs[i2c_num].handler = handler;
@@ -410,8 +432,6 @@ int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 }
 
 #ifdef FREERTOS
-
-static SemaphoreHandle_t mutex[2] = { 0 };
 
 struct rtos_task_t {
 	void *task_handle;
@@ -427,17 +447,18 @@ static void rtos_handler(void *task, uint8_t err)
 	rtos_schedule_isr(param->task_handle);
 }
 
-int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
-	uint8_t *data, uint16_t size)
+/*
+ * this is rtos oriented i2c function. During the transfer the task is put
+ * on hold and not using a cpu time. When transfer is finished the task
+ * handler is reported to isr daemon resulting deferred interrupt technics.
+ * isr daemon is waiking up calling task and execution of code continues.
+ */
+static int rw_reg8_rtos(uint8_t i2c_num, uint8_t addr, uint8_t *reg,
+	uint8_t reg_size, uint8_t *data, uint16_t size, enum dir_t dir)
 {
 	int res;
 	struct rtos_task_t params;
-
-	struct msg_t msg[] = {
-		{ WRITING, &reg, 1 },
-		{ WRITING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
+	static SemaphoreHandle_t mutex[2] = { 0 };
 
 	if (!mutex[i2c_num - 1])
 		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
@@ -448,7 +469,7 @@ int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 
 	i2c_set_handler(i2c_num, rtos_handler, &params);
 
-	res = transfer(i2c_num, addr, msgs);
+	res = send_message(i2c_num, addr, reg, reg_size, data, size, dir);
 	if (!res)
 		vTaskSuspend(params.task_handle);
 
@@ -460,37 +481,18 @@ int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	return -params.err;
 }
 
+int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
+	uint8_t *data, uint16_t size)
+{
+	return rw_reg8_rtos(i2c_num, addr, &reg, sizeof(reg),
+		data, size, WRITING);
+}
+
 int i2c_read_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	uint8_t *data, uint16_t size)
 {
-	int res;
-	struct rtos_task_t params;
-
-	struct msg_t msg[] = {
-		{ WRITING, &reg, 1 },
-		{ READING, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	if (!mutex[i2c_num - 1])
-		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
-
-	params.task_handle = xTaskGetCurrentTaskHandle();
-
-	i2c_set_handler(i2c_num, rtos_handler, &params);
-
-	res = transfer(i2c_num, addr, msgs);
-	if (!res)
-		vTaskSuspend(params.task_handle);
-
-	xSemaphoreGive(mutex[i2c_num - 1]);
-
-	if (res)
-		return res;
-
-	return -params.err;
+	return rw_reg8_rtos(i2c_num, addr, &reg, sizeof(reg),
+		data, size, READING);
 }
 
 #endif /* FREERTOS */

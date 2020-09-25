@@ -90,32 +90,14 @@ int i2c_write_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 int i2c_read_reg(uint8_t i2c_num, uint8_t addr, uint8_t reg,
 	uint8_t *data, uint16_t size);
 
-/**
-  * @brief  Transfer the data buffer to location
-  * @param  i2c_num: can be 1 or 2 to select the I2C peripheral.
-  * @param  addr: device i2c address
-  * @param  pos: pointer to buffer location
-  * @param  pos_size: size of location
-  * @param  data: pointer to buffer
-  * @param  size: amount of bytes to transfer
-  *
-  * @retval 0 if success, I2C_ERR_NOACK if device not responds
-  */
-int i2c_write(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
+/* I2C eeprom access functions with 16/32 bit address size */
+int i2c_write_eeprom_w(uint8_t i2c_num, uint8_t addr, uint16_t reg,
 	uint8_t *data, uint16_t size);
-
-/**
-  * @brief  Receives the data from location to buffer
-  * @param  i2c_num: can be 1 or 2 to select the I2C peripheral.
-  * @param  addr: device i2c address
-  * @param  pos: pointer to buffer location
-  * @param  pos_size: size of location
-  * @param  data: pointer to buffer
-  * @param  size: amount of bytes to receive
-  *
-  * @retval 0 if success, I2C_ERR_NOACK if device not responds
-  */
-int i2c_read(uint8_t i2c_num, uint8_t addr, uint8_t *pos, uint16_t pos_size,
+int i2c_read_eeprom_w(uint8_t i2c_num, uint8_t addr, uint16_t reg,
+	uint8_t *data, uint16_t size);
+int i2c_write_eeprom_dw(uint8_t i2c_num, uint8_t addr, uint32_t reg,
+	uint8_t *data, uint16_t size);
+int i2c_read_eeprom_dw(uint8_t i2c_num, uint8_t addr, uint32_t reg,
 	uint8_t *data, uint16_t size);
 
 /**

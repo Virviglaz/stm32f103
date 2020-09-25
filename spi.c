@@ -269,91 +269,100 @@ int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high)
 	return 0;
 }
 
+static int send_message(
+	uint8_t spi_num,
+	GPIO_TypeDef *gpio,
+	uint16_t pin,
+	uint8_t *reg,
+	uint8_t reg_size,
+	uint8_t *tx_data,
+	uint8_t *rx_data,
+	uint16_t size,
+	void (*handler)(uint8_t spi_num, void *private_data),
+	void *private_data)
+{
+	/* we use static variable to reduce the stack usage using RTOS */
+	static struct msg_t msg[2];
+	static struct msg_t *msgs[3];
+
+	msg[0].tx = reg;
+	msg[0].rx = 0;
+	msg[0].size = reg_size;
+
+	msg[1].tx = tx_data;
+	msg[1].rx = rx_data;
+	msg[1].size = size;
+
+	msgs[0] = &msg[0];
+	msgs[1] = &msg[1];
+	msgs[2] = 0;
+
+	return transfer(spi_num, msgs, gpio, pin, handler, private_data);
+}
+
 int spi_write_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 	uint8_t reg, uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ &reg, 0, 1 },
-		{ data, 0, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	return transfer(spi_num, msgs, gpio, pin, 0, 0);
+	return send_message(spi_num, gpio, pin, &reg, 1,
+		data, 0, size, 0, 0);
 }
 
 int spi_read_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 	uint8_t reg, uint8_t *data, uint16_t size)
 {
-	struct msg_t msg[] = {
-		{ &reg, 0, 1 },
-		{ 0, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	return transfer(spi_num, msgs, gpio, pin, 0, 0);
+	return send_message(spi_num, gpio, pin, &reg, 1,
+		0, data, size, 0, 0);
 }
 
 #ifdef FREERTOS
 
-static SemaphoreHandle_t mutex[2] = { 0 };
-
 static void handler(uint8_t spi_num, void *private_data)
 {
-	portYIELD_FROM_ISR(xTaskResumeFromISR(private_data));
+	rtos_schedule_isr(private_data);
+}
+
+static int send_message_rtos(
+	uint8_t spi_num,
+	GPIO_TypeDef *gpio,
+	uint16_t pin,
+	uint8_t *reg,
+	uint8_t reg_size,
+	uint8_t *tx_data,
+	uint8_t *rx_data,
+	uint16_t size)
+{
+	static SemaphoreHandle_t mutex[2] = { 0 };
+	TaskHandle_t handle;
+	int res;
+	uint8_t n = spi_num - 1;
+
+	if (!mutex[n])
+		mutex[n] = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex[n], portMAX_DELAY);
+
+	handle = xTaskGetCurrentTaskHandle();
+
+	res = send_message(spi_num, gpio, pin, reg, reg_size,
+		tx_data, rx_data, size, handler, handle);
+	if (!res)
+		vTaskSuspend(handle);
+
+	xSemaphoreGive(mutex[n]);
+
+	return res;
 }
 
 int spi_write_reg_rtos(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 	uint8_t reg, uint8_t *data, uint16_t size)
 {
-	int res;
-	TaskHandle_t handle;
-	struct msg_t msg[] = {
-		{ &reg, 0, 1 },
-		{ data, 0, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	if (!mutex[spi_num - 1])
-		mutex[spi_num - 1] = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(mutex[spi_num - 1], portMAX_DELAY);
-
-	handle = xTaskGetCurrentTaskHandle();
-
-	res = transfer(spi_num, msgs, gpio, pin, handler, handle);
-	if (!res)
-		vTaskSuspend(handle);
-
-	xSemaphoreGive(mutex[spi_num - 1]);
-
-	return res;
+	return send_message_rtos(spi_num, gpio, pin, &reg, 1, data, 0, size);
 }
 
 int spi_read_reg_rtos(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 	uint8_t reg, uint8_t *data, uint16_t size)
 {
-	int res;
-	TaskHandle_t handle;
-	struct msg_t msg[] = {
-		{ &reg, 0, 1 },
-		{ 0, data, size },
-	};
-	struct msg_t *msgs[] = { &msg[0], &msg[1], 0 };
-
-	if (!mutex[spi_num - 1])
-		mutex[spi_num - 1] = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(mutex[spi_num - 1], portMAX_DELAY);
-
-	handle = xTaskGetCurrentTaskHandle();
-
-	res = transfer(spi_num, msgs, gpio, pin, handler, handle);
-	if (!res)
-		vTaskSuspend(handle);
-
-	xSemaphoreGive(mutex[spi_num - 1]);
-
-	return res;
+	return send_message_rtos(spi_num, gpio, pin, &reg, 1, 0, data, size);
 }
 
 #endif /* FREERTOS */
