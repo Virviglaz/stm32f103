@@ -80,8 +80,37 @@ simply use delay_us or delay_ms. No initialization is needed.
 delay_ms(1000);
 delay_us(1000);
 ```
-
-... also available ADC, CRC and RTC drivers
-
+# Added FreeRTOS support:
+## No waiting calls. All functions using async execution.
+### UART
+```c
+/* block the task while string is sending with DMA */
+uart_send_string_rtos(1, "Hallo world\r\n");
+```
+### EXTI
+```c
+/* block the task until pin change from HIGH to LOW */
+wait_for_pinchange_rtos(PB11, false, true);
+```
+### I2C
+```c
+/* block the task while I2C is reading the data using DMA */
+i2c_read_reg_rtos(1, 0x68, 0xEE, buf, sizeof(buf));
+```
+### SPI
+```c
+/* block the task while SPI is reading the data using DMA */
+spi_read_reg_rtos(1, PA3, 0xEE, buf, sizeof(buf));
+```
+### DMA
+```c
+/* block the task while DMA is copying the data from memory to memory */
+memcpy_dma8((void *)buf, (void *)s, sizeof(buf));
+```
+### ADC
+```c
+/* block the task while ADC is performing conversion */
+adc_single_conversion_rtos(1, 2);
+```
 Development is in progress. Examples will be provided.
 For remarks contact me to pavelnadein@gmail.com
