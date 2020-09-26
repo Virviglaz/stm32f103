@@ -143,7 +143,7 @@ void uart_init(uint8_t uart_num, uint32_t freq)
 	}
 
 	uart->BRR = UART_BRR_SAMPLING8(clock_source, freq << 1);
-	uart->CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE;
+	uart->CR1 = USART_CR1_UE | USART_CR1_TE;
 	uart->CR2 = 0;
 	uart->CR3 = USART_CR3_DMAT;
 }
@@ -174,14 +174,14 @@ void uart_enable_rx_buffer(uint8_t uart_num, char *buf, uint16_t size,
 	rx->private_data = private_data;
 	rx->ready = false;
 
-	uart->CR1 |= USART_CR1_RXNEIE;
+	uart->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE;
 }
 
 void uart_disable_rx_buffer(uint8_t uart_num)
 {
 	USART_TypeDef *uart = uarts[uart_num - 1];
 
-	uart->CR1 &= ~USART_CR1_RXNEIE;
+	uart->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE);
 }
 
 int uart_send_data(uint8_t uart_num, char *buf, uint16_t size,
