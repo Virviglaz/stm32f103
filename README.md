@@ -73,7 +73,12 @@ i2c_write_reg(1, 0xEE, 0x05, buf, sizeof(buf));
 /* read 10 bytes to buffer from register 0x07 of device with address 0xD0 using I2C1 */
 i2c_read_reg(1, 0xD0, 0x07, buf, 10);
 ```
-
+## DAC example
+Convert data to analog value using DMA and TIMER. Support only 1 channel at this moment.
+```c
+/* Send sine signal over DMA_CH2->PA5 using TIM7 at 5kHz frequency */
+dac_start_12bit(2, sine_table, sizeof(sine) / sizeof(uint16_t), TIM7_TRGO, 5000);
+```
 ## Delays example
 simply use delay_us or delay_ms. No initialization is needed.
 ```c
