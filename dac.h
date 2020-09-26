@@ -61,18 +61,52 @@
 #endif
 
 enum trig_t {
-	TIM6_TRGO	= 0,
-	TIM3_TRGO	= 1,
-	TIM7_TRGO	= 2,
-	TIM5_TRGO	= 3,
-	TIM2_TRGO	= 4,
-	TIM4_TRGO	= 5,
-	EXTI_9		= 6,
-	//START_NOW	= 7,
+	TIM6_TRGO = 0,
+	TIM3_TRGO = 1,
+	TIM7_TRGO = 2,
+	TIM5_TRGO = 3,
+	TIM2_TRGO = 4,
+	TIM4_TRGO = 5,
 };
 
+/**
+  * @brief  Start DAC 12 bit conversion using DMA.
+  * @param  ch: 1 or 2 DAC channel output.
+  * @param  src: Pointer to data source.
+  * @param  size: Size of data to transfer.
+  * @param  trig: Trigger source. Choose available timer.
+  * @param  freq: Frequency in Hz.
+  *
+  * @retval 0 if success.
+  */
 int dac_start_12bit(uint8_t ch, uint16_t *src, uint16_t size,
 	enum trig_t trig, uint32_t freq);
+
+/**
+  * @brief  Enable the end of conversion interrupt.
+  * @param  handler: Pointer to function. 0 to disable.
+  * @param  data: Private data pointer.
+  *
+  * @retval None.
+  */
+void dac_enable_interrupt(void (*handler)(void *data), void *data);
+
+#ifdef FREERTOS
+
+/**
+  * @brief  Start DAC 12 bit conversion using DMA and RTOS.
+  * @param  ch: 1 or 2 DAC channel output.
+  * @param  src: Pointer to data source.
+  * @param  size: Size of data to transfer.
+  * @param  trig: Trigger source. Choose available timer.
+  * @param  freq: Frequency in Hz.
+  *
+  * @retval 0 if success.
+  */
+int dac_start_12bit_rtos(uint8_t ch, uint16_t *src, uint16_t size,
+	enum trig_t trig, uint32_t freq);
+
+#endif /* FREERTOS */
 
 #ifdef __cplusplus
 }

@@ -61,10 +61,14 @@ struct dac_cr_t {
 
 static volatile struct {
 	bool done;
+	void (*handler)(void *data);
+	void *data;
 } isr = { 0 };
 
 static void handler(void *data)
 {
+	if (isr.handler)
+		isr.handler(isr.data);
 	isr.done = true;
 }
 
@@ -83,7 +87,7 @@ int dac_start_12bit(uint8_t ch, uint16_t *src, uint16_t size,
 
 	RCC->APB1ENR |= RCC_APB1ENR_DACEN;
 
-	if (!ch || ch > 2)
+	if (!ch || ch > 2 || trig > TIM4_TRGO)
 		return -EINVAL;
 
 	ch--;
@@ -109,9 +113,52 @@ int dac_start_12bit(uint8_t ch, uint16_t *src, uint16_t size,
 	dma_ch->CCR = DMA_CCR1_PSIZE_0 | DMA_CCR1_MSIZE_0 | DMA_CCR1_DIR | \
 		DMA_CCR1_EN | DMA_CCR1_TCIE | DMA_CCR1_MINC;
 
-	while (isr.done == false) { }
+	if (!isr.handler) /* if no handler wait for finish */
+		while (isr.done == false) { }
 
 	timer_enable_update_event(tim, false);
 
 	return 0;
 }
+
+void dac_enable_interrupt(void (*handler)(void *data), void *data)
+{
+	isr.handler = handler;
+	isr.data = data;
+}
+
+#ifdef FREERTOS
+
+static void handler(void *data)
+{
+	rtos_schedule_isr(private_data);
+}
+
+int dac_start_12bit_rtos(uint8_t ch, uint16_t *src, uint16_t size,
+	enum trig_t trig, uint32_t freq)
+{
+	static SemaphoreHandle_t mutex = 0;
+	TaskHandle_t handle;
+	int res;
+
+	if (!mutex)
+		mutex = xSemaphoreCreateMutex();
+
+	xSemaphoreTake(mutex, portMAX_DELAY);
+
+	handle = xTaskGetCurrentTaskHandle();
+
+	dac_enable_interrupt(handler);
+
+	res = dac_start_12bit(ch, src, sizeof, trig, freq);
+	if (!res)
+		vTaskSuspend(handle);
+
+	dac_enable_interrupt(0);
+
+	xSemaphoreGive(mutex);
+
+	return res;
+}
+
+#endif /* FREERTOS */
