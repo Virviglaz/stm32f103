@@ -174,6 +174,12 @@ static int transfer(uint8_t i2c_num, uint8_t addr, struct msg_t **msg)
 	i2c = i2c_s[i2c_num];
 	isr = &isrs[i2c_num];
 
+	if (!isr->i2c) {
+		int ret = i2c_init(i2c_num + 1, false);
+		if (ret)
+			return ret;
+	}
+
 	if (isr->task == NO_INIT) {
 		int res = i2c_init(i2c_num + 1, false);
 		if (res)
