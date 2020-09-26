@@ -246,6 +246,18 @@ static inline uint16_t gpio_read(GPIO_TypeDef *gpio, uint16_t pinmask)
 	return gpio->IDR & pinmask;
 }
 
+/**
+  * @brief  Macro to invert port value.
+  * @param  gpio: Pointer to GPIO perepherial.
+  * @param  pinmask: Pins to invert value.
+  *
+  * @retval None.
+  */
+static inline void gpio_inv(GPIO_TypeDef *gpio, uint16_t pinmask)
+{
+	gpio->ODR = gpio->ODR ^ pinmask;
+}
+
 #ifdef __cplusplus
 }
 #endif

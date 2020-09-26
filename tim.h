@@ -124,6 +124,15 @@ int timer_enable_interrupt(uint8_t tim,
   */
 int set_timer_period(uint8_t tim, uint16_t period);
 
+/**
+  * @brief  Enable timer event TRGO.
+  * @param  tim: Number of timer.
+  * @param  state: Enable/disable TRGO.
+  *
+  * @retval 0 if success.
+  */
+int timer_enable_update_event(uint8_t tim, bool state);
+
 #ifdef __cplusplus
 }
 #endif

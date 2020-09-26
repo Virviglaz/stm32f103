@@ -76,6 +76,22 @@ static inline void dma_release(DMA_Channel_TypeDef *ch)
 		ch->CCR = 0;
 }
 
+#if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \
+	|| defined(STM32F10X_MD_VL) || defined(STM32F10X_HD_VL)
+
+/**
+  * @brief  Initialize DMA2 and get a channel.
+  * @param  channel: Number of channel.
+  * @param  handler: Pointer to function to be called at finish.
+  * @param  data: Pointer to data to be provided to handler.
+  *
+  * @retval 0 if failed, pointer to channel if found.
+  */
+DMA_Channel_TypeDef *get_dma2_ch(uint8_t channel,
+	void (*handler)(void *data), void *data);
+
+#endif /* DMA2 */
+
 #ifdef FREERTOS
 
 /**

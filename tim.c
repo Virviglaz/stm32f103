@@ -46,10 +46,11 @@
 #include "rcc.h"
 #include <errno.h>
 
-static struct {
+static struct isr_t {
 	void (*handler)(uint8_t tim, void *data);
 	void *data;
-} tim_isr[17];
+	bool init_done;
+} tim_isr[17] = { 0 };
 
 static TIM_TypeDef *get_tim_base(uint8_t tim)
 {
@@ -62,12 +63,21 @@ static TIM_TypeDef *get_tim_base(uint8_t tim)
 
 int timer_init(uint8_t tim, uint32_t freq, uint32_t period)
 {
-	TIM_TypeDef *base = get_tim_base(tim);
-	struct system_clock_t *clock = get_clocks();
+	TIM_TypeDef *base;
+	struct system_clock_t *clock;
 	uint32_t clock_freq, prc, arr;
+	struct isr_t *isr;
+
+	base = get_tim_base(tim);
 
 	if (!base)
 		return -EINVAL;
+
+	isr = &tim_isr[tim - 1];
+	if (isr->init_done)
+		return 0;
+
+	clock = get_clocks();
 
 	switch (tim) {
 	case 1:
@@ -171,6 +181,8 @@ int timer_init(uint8_t tim, uint32_t freq, uint32_t period)
 	base->ARR = arr;
 	base->EGR = TIM_EGR_UG;
 	base->CR1 = TIM_CR1_CEN;
+
+	isr->init_done = true;
 
 	return 0;
 }
@@ -360,6 +372,21 @@ int set_timer_period(uint8_t tim, uint16_t period)
 
 	base->ARR = period;
 	base->EGR = TIM_EGR_UG;
+
+	return 0;
+}
+
+int timer_enable_update_event(uint8_t tim, bool state)
+{
+	TIM_TypeDef *base = get_tim_base(tim);
+
+	if (!base)
+		return -EINVAL;
+
+	base->CR2 &= ~TIM_CR2_MMS;
+
+	if (state)
+		base->CR2 |= TIM_CR2_MMS_1;
 
 	return 0;
 }

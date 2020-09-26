@@ -43,15 +43,75 @@
  */
 
 #include "dac.h"
+#include "dma.h"
+#include "tim.h"
+#include "delay.h"
+#include <errno.h>
 
-void dac_init(const uint8_t channel)
+struct dac_cr_t {
+	uint8_t : 3;
+	bool dma_enable	: 1;
+	uint8_t mamp	: 4;
+	uint8_t wave	: 2;
+	uint8_t tsel	: 2;
+	bool ten	: 1;
+	bool boff	: 1;
+	bool enable	: 1;
+};
+
+static volatile struct {
+	bool done;
+} isr = { 0 };
+
+static void handler(void *data)
 {
-#if defined (STM32F10X_HD) || defined  (STM32F10X_CL) || \
-	defined (STM32F10X_LD_VL) || defined (STM32F10X_MD_VL) || \
-	defined  (STM32F10X_HD_VL)
+	isr.done = true;
+}
+
+int dac_start_12bit(uint8_t ch, uint16_t *src, uint16_t size,
+	enum trig_t trig, uint32_t freq)
+{
+	const uint8_t dma_ch_num[] = { 3, 4 };
+	const uint32_t dac_dst[] = {
+		(uint32_t)&DAC->DHR12R1, (uint32_t)&DAC->DHR12R2 };
+	const uint8_t timer_sources[] = { 6, 3, 7, 5, 2, 4 };
+	DMA_Channel_TypeDef *dma_ch;
+	uint16_t cr_val = (trig << 3) | \
+		DAC_CR_DMAEN1 | DAC_CR_TEN1 | DAC_CR_EN1;
+	int ret;
+	uint8_t tim;
+
 	RCC->APB1ENR |= RCC_APB1ENR_DACEN;
-	DAC->CR |= channel == 1 ? DAC_CR_EN1 : DAC_CR_EN2;
-#else
-	#error "No DAC available for this mcu"
-#endif
+
+	if (!ch || ch > 2)
+		return -EINVAL;
+
+	ch--;
+
+	/* setup the timer to get TRGO event */
+	tim = timer_sources[trig];
+	ret = timer_init(tim, freq, 0);
+	if (ret)
+		return ret;
+
+	timer_enable_update_event(tim, true);
+	isr.done = false;
+
+	DAC->CR = cr_val << (ch ? 16 : 0);
+
+	dma_ch = get_dma2_ch(dma_ch_num[ch], handler, 0);
+	if (!dma_ch)
+		return -EILSEQ;
+
+	dma_ch->CMAR = (uint32_t)src;
+	dma_ch->CPAR = dac_dst[ch];
+	dma_ch->CNDTR = size;
+	dma_ch->CCR = DMA_CCR1_PSIZE_0 | DMA_CCR1_MSIZE_0 | DMA_CCR1_DIR | \
+		DMA_CCR1_EN | DMA_CCR1_TCIE | DMA_CCR1_MINC;
+
+	while (isr.done == false) { }
+
+	timer_enable_update_event(tim, false);
+
+	return 0;
 }

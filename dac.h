@@ -51,29 +51,28 @@
 
 #include <stm32f10x.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "rtos.h"
 
-void dac_init(const uint8_t channel);
+#if !defined(STM32F10X_HD) && !defined(STM32F10X_CL) && \
+	!defined(STM32F10X_LD_VL) && !defined(STM32F10X_MD_VL) && \
+	!defined(STM32F10X_HD_VL)
+#error "No DAC available for this mcu!"
+#endif
 
-static inline void dac_wr12r1(uint16_t value)
-{
-	DAC->DHR12R1 = value;
-}
+enum trig_t {
+	TIM6_TRGO	= 0,
+	TIM3_TRGO	= 1,
+	TIM7_TRGO	= 2,
+	TIM5_TRGO	= 3,
+	TIM2_TRGO	= 4,
+	TIM4_TRGO	= 5,
+	EXTI_9		= 6,
+	//START_NOW	= 7,
+};
 
-static inline void dac_wr12r2(uint16_t value)
-{
-	DAC->DHR12R2 = value;
-}
-
-static inline void dac_wr8r1(uint8_t value)
-{
-	DAC->DHR8R1 = value;
-}
-
-static inline void dac_wr8r21(uint8_t value)
-{
-	DAC->DHR8R2 = value;
-}
+int dac_start_12bit(uint8_t ch, uint16_t *src, uint16_t size,
+	enum trig_t trig, uint32_t freq);
 
 #ifdef __cplusplus
 }

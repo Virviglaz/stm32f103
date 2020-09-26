@@ -45,17 +45,12 @@
 #include "dma.h"
 #include <string.h>
 
-#define NOF_DMA_CHANNELS	7
-
-static DMA_Channel_TypeDef *dev1_chs[] = {
-	DMA1_Channel1,
-	DMA1_Channel2,
-	DMA1_Channel3,
-	DMA1_Channel4,
-	DMA1_Channel5,
-	DMA1_Channel6,
-	DMA1_Channel7,
-};
+#if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \
+	|| defined(STM32F10X_MD_VL) || defined(STM32F10X_HD_VL)
+#define NOF_DMA_CHANNELS	(7 + 4) /* DMA1 + DMA2 */
+#else
+#define NOF_DMA_CHANNELS	(7 + 0) /* DMA2 not used */
+#endif
 
 static struct isr_t {
 	void (*handler)(void *data);
@@ -65,18 +60,27 @@ static struct isr_t {
 DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	void (*handler)(void *data), void *data)
 {
+	const DMA_Channel_TypeDef *dev1_chs[] = {
+		DMA1_Channel1,
+		DMA1_Channel2,
+		DMA1_Channel3,
+		DMA1_Channel4,
+		DMA1_Channel5,
+		DMA1_Channel6,
+		DMA1_Channel7,
+	};
 	uint8_t i;
 
 	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 
-	if (channel > NOF_DMA_CHANNELS)
+	if (channel > ARRAY_SIZE(dev1_chs))
 		return 0;
 
 	/* find specified channel */
 	if (channel) {
 		DMA_Channel_TypeDef *ch;
 		channel--;
-		ch = dev1_chs[channel];
+		ch = (void *)dev1_chs[channel];
 
 		/* check channel is free */
 		if (ch->CCR & DMA_CCR1_EN)
@@ -92,8 +96,8 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	}
 
 	/* find first free channel */
-	for (i = 0; i != NOF_DMA_CHANNELS; i++) {
-		DMA_Channel_TypeDef *ch = dev1_chs[i];
+	for (i = 0; i != ARRAY_SIZE(dev1_chs); i++) {
+		DMA_Channel_TypeDef *ch = (void *)dev1_chs[i];
 		if (ch->CCR & DMA_CCR1_EN)
 			continue;
 
@@ -108,6 +112,74 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	/* no channels found */
 	return 0;
 }
+
+#if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \
+	|| defined(STM32F10X_MD_VL) || defined(STM32F10X_HD_VL)
+
+DMA_Channel_TypeDef *get_dma2_ch(uint8_t channel,
+	void (*handler)(void *data), void *data)
+{
+	const DMA_Channel_TypeDef *dev2_chs[] = {
+		DMA2_Channel1,
+		DMA2_Channel2,
+		DMA2_Channel3,
+		DMA2_Channel4,
+		/* DMA2_Channel5: NOT USED FOR NOW */
+	};
+	DMA_Channel_TypeDef *ch;
+
+	RCC->AHBENR |= RCC_AHBENR_DMA2EN;
+
+	if (!channel || channel > ARRAY_SIZE(dev2_chs))
+		return 0;
+
+	channel--;
+	ch = (void *)dev2_chs[channel];
+
+	/* check channel is free */
+	if (ch->CCR & DMA_CCR1_EN)
+		return 0;
+
+	NVIC_EnableIRQ((enum IRQn)(DMA2_Channel1_IRQn + channel));
+
+	channel += NOF_DMA_CHANNELS - ARRAY_SIZE(dev2_chs);
+
+	/* assign handler */
+	isrs[channel].handler = handler;
+	isrs[channel].data = data;
+
+	return ch;
+}
+
+void DMA2_Channel1_IRQHandler(void)
+{
+	DMA2->IFCR = DMA_IFCR_CGIF1;
+	dma_release(DMA2_Channel1);
+	isrs[7].handler(isrs[7].data);
+}
+
+void DMA2_Channel2_IRQHandler(void)
+{
+	DMA2->IFCR = DMA_IFCR_CGIF2;
+	dma_release(DMA2_Channel2);
+	isrs[8].handler(isrs[8].data);
+}
+
+void DMA2_Channel3_IRQHandler(void)
+{
+	DMA2->IFCR = DMA_IFCR_CGIF3;
+	dma_release(DMA2_Channel3);
+	isrs[9].handler(isrs[9].data);
+}
+
+void DMA2_Channel4_5_IRQHandler(void)
+{
+	DMA2->IFCR = DMA_IFCR_CGIF4;
+	dma_release(DMA2_Channel4);
+	isrs[10].handler(isrs[10].data);
+}
+
+#endif /* DMA2 */
 
 void DMA1_Channel1_IRQHandler(void)
 {
