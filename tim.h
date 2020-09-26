@@ -57,12 +57,12 @@
 /**
   * @brief  Initialize the timer.
   * @param  tim: Number of timer.
-  * @param  prc: Prescaller value.
-  * @param  period: period value.
+  * @param  freq: Timer frequency in MHz (0 if period is used)
+  * @param  sec: Timer period in sec.
   *
   * @retval 0 if success.
   */
-int timer_init(uint8_t tim, uint16_t prc, uint16_t period);
+int timer_init(uint8_t tim, uint32_t freq, uint32_t period);
 
 /**
   * @brief  Start the timer.

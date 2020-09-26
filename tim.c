@@ -43,6 +43,7 @@
  */
 
 #include "tim.h"
+#include "rcc.h"
 #include <errno.h>
 
 static struct {
@@ -59,75 +60,94 @@ static TIM_TypeDef *get_tim_base(uint8_t tim)
 	return tim >= (sizeof(tims) / sizeof(void *)) ? 0 : (void *)tims[tim];
 }
 
-int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
+int timer_init(uint8_t tim, uint32_t freq, uint32_t period)
 {
 	TIM_TypeDef *base = get_tim_base(tim);
+	struct system_clock_t *clock = get_clocks();
+	uint32_t clock_freq, prc, arr;
 
 	if (!base)
 		return -EINVAL;
 
 	switch (tim) {
 	case 1:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
 		break;
 	case 2:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 		break;
 	case 3:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
 		break;
 #if !defined (STM32F10X_LD) && !defined (STM32F10X_LD_VL)
 	case 4:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM4EN;
 		break;
 #endif /* !STM32F10X_LD !STM32F10X_LD_VL */
 #if defined (STM32F10X_HD) || defined  (STM32F10X_CL)
 	case 5:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM5EN;
 		break;
 	case 6:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
 		break;
 	case 7:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
 		break;
 #endif /* STM32F10X_HD STM32F10X_CL */
 #if defined (STM32F10X_HD) || defined (STM32F10X_XL)
 	case 8:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM8EN;
 		break;
 #endif /* STM32F10X_HD STM32F10X_XL */
 #ifdef STM32F10X_XL
 	case 9:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM9EN;
 		break;
 	case 10:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM10EN;
 		break;
 	case 11:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM11EN;
 		break;
 #endif /* STM32F10X_XL */
 #ifdef STM32F10X_HD_VL
 	case 12:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM12EN;
 		break;
 	case 13:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM13EN;
 		break;
 	case 14:
+		clock_freq = clock->apb1_freq;
 		RCC->APB1ENR |= RCC_APB1ENR_TIM14EN;
 		break;
 #endif /* STM32F10X_HD_VL */
 #if defined (STM32F10X_LD_VL) || defined (STM32F10X_MD_VL) || \
 	defined (STM32F10X_HD_VL)
 	case 15:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;
 		break;
 	case 16:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM16EN;
 		break;
 	case 17:
+		clock_freq = clock->apb2_freq;
 		RCC->APB2ENR |= RCC_APB2ENR_TIM17EN;
 		break;
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
@@ -135,8 +155,20 @@ int timer_init(uint8_t tim, uint16_t prc, uint16_t period)
 		return -EINVAL;
 	};
 
-	base->PSC = prc;
-	base->ARR = period;
+	if (freq) {
+		prc = 0;
+		do {
+			arr = clock_freq / freq / ++prc;
+		} while (arr > 0xFFFF);
+	} else {
+		prc = 0xFFFF;
+		do {
+			arr = clock_freq * period / --prc;
+		} while (arr > 0xFFFF);
+	}
+
+	base->PSC = prc - 1;
+	base->ARR = arr;
 	base->EGR = TIM_EGR_UG;
 	base->CR1 = TIM_CR1_CEN;
 
