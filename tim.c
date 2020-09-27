@@ -391,6 +391,25 @@ int timer_enable_update_event(uint8_t tim, bool state)
 	return 0;
 }
 
+int timer_deinit(uint8_t tim)
+{
+	TIM_TypeDef *base;
+	struct isr_t *isr;
+
+	base = get_tim_base(tim);
+
+	if (!base)
+		return -EINVAL;
+
+	isr = &tim_isr[tim - 1];
+	isr->init_done = 0;
+
+	base->CR1 = 0;
+	base->CR2 = 0;
+
+	return 0;
+}
+
 /* INTERRUPT VECTORS */
 void TIM1_UP_IRQHandler(void)
 {

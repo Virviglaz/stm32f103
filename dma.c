@@ -102,8 +102,8 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 			continue;
 
 		/* assign handler */
-		isrs[channel].handler = handler;
-		isrs[channel].data = data;
+		isrs[i].handler = handler;
+		isrs[i].data = data;
 
 		NVIC_EnableIRQ((enum IRQn)(DMA1_Channel1_IRQn + i));
 		return ch;
