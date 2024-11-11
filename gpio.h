@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -53,6 +53,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+
+#ifndef BIT
+#define BIT(x)		(1 << (x))
+#endif
 
 #define PA0			GPIOA, BIT(0)
 #define PA1			GPIOA, BIT(1)

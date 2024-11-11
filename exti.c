@@ -65,9 +65,9 @@ static inline int set_pin_int(GPIO_TypeDef *gpio, uint8_t pin,
 {
 	uint8_t line;
 	struct exit_isr_t *isr;
-	uint16_t pin_mask = BIT(pin);
+	uint16_t pin_mask = 1 << pin;
 
-	if (pin >= ARRAY_SIZE(isrs))
+	if (pin >= sizeof(isrs) / sizeof(isrs[0]))
 		return -EINVAL;
 
 	line = GPIO_TO_LINE_INDEX(gpio);
@@ -111,7 +111,7 @@ static inline int clr_pin_int(GPIO_TypeDef *gpio, uint16_t pin)
 	uint8_t line;
 	struct exit_isr_t *isr;
 
-	if (pin >= ARRAY_SIZE(isrs))
+	if (pin >= sizeof(isrs) / sizeof(isrs[0]))
 		return -EINVAL;
 
 	line = GPIO_TO_LINE_INDEX(gpio);
@@ -140,7 +140,7 @@ int add_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin,
 	int ret = -EINVAL;
 
 	for (i = 0; i != 16; i++)
-		if (pin & BIT(i)) {
+		if (pin & (1 << i)) {
 			ret = set_pin_int(gpio, i, handler, data,
 				rising, falling);
 			if (ret)
@@ -155,7 +155,7 @@ int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin)
 	int ret = -EINVAL;
 
 	for (i = 0; i != 16; i++)
-		if (pin & BIT(i)) {
+		if (pin & (1 << i)) {
 			ret = clr_pin_int(gpio, i);
 			if (ret)
 				return ret;

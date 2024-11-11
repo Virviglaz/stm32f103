@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -93,14 +93,14 @@ static void init(uint8_t adc_num, ADC_TypeDef *adc)
 	!defined (STM32F10X_HD_VL)
 	NVIC_EnableIRQ(ADC1_2_IRQn);
 #else
-	NVIC_EnableIRQ(ADC1_IRQn)
+	NVIC_EnableIRQ(ADC1_IRQn);
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 }
 
 int adc_start(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 {
 	ADC_TypeDef *adc = ADC_DEV(adc_num);
-	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+	if (!adc_num || adc_num > sizeof(adc_params) / sizeof(adc_params[0]))
 		return -EINVAL;
 
 	/* adc index starting from 0 */
@@ -131,7 +131,7 @@ int adc_read(uint8_t adc_num)
 {
 	ADC_TypeDef *adc = ADC_DEV(adc_num);
 
-	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+	if (!adc_num || adc_num > sizeof(adc_params) / sizeof(adc_params[0]))
 		return -EINVAL;
 
 	if (!(adc->SR & ADC_SR_EOC))
@@ -145,7 +145,7 @@ int adc_single_conversion(uint8_t adc_num, uint8_t channel, uint8_t sample_rate)
 	ADC_TypeDef *adc = ADC_DEV(adc_num);
 	int res;
 
-	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+	if (!adc_num || adc_num > sizeof(adc_params) / sizeof(adc_params[0]))
 		return -EINVAL;
 
 	res = adc_start(adc_num, channel, sample_rate);
@@ -162,7 +162,7 @@ void adc_enable_interrupt(uint8_t adc_num,
 {
 	ADC_TypeDef *adc = ADC_DEV(adc_num);
 
-	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
+	if (!adc_num || adc_num > sizeof(adc_params) / sizeof(adc_params[0]))
 		return;
 
 	adc_num--;
@@ -190,10 +190,10 @@ void ADC1_2_IRQHandler(void)
 	}
 }
 #else
-void ADC1_IRQn(void)
+void ADC1_2_IRQHandler(void)
 {
 	ADC1->CR2 = 0;
-	handler(1, ADC1->DR);
+	adc_params[0].handler(1, ADC1->DR);
 }
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 

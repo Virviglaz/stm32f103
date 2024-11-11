@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -93,7 +93,7 @@ static const uint16_t *get_dr_reg(uint8_t n)
 
 	RCC->APB1ENR |= RCC_APB1ENR_BKPEN | RCC_APB1ENR_PWREN;
 
-	return n < ARRAY_SIZE(dr_regs) ? (uint16_t *)dr_regs[n] : 0;
+	return n < (sizeof(dr_regs) / sizeof(dr_regs[0])) ? (uint16_t *)dr_regs[n] : 0;
 }
 
 void bkp_write(uint8_t reg_num, uint16_t value)

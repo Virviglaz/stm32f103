@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -73,7 +73,7 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 
 	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 
-	if (channel > ARRAY_SIZE(dev1_chs))
+	if (channel > sizeof(dev1_chs) / sizeof(dev1_chs[0]))
 		return 0;
 
 	/* find specified channel */
@@ -96,7 +96,7 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 	}
 
 	/* find first free channel */
-	for (i = 0; i != ARRAY_SIZE(dev1_chs); i++) {
+	for (i = 0; i != sizeof(dev1_chs) / sizeof(dev1_chs[0]); i++) {
 		DMA_Channel_TypeDef *ch = (void *)dev1_chs[i];
 		if (ch->CCR & DMA_CCR1_EN)
 			continue;
@@ -114,7 +114,7 @@ DMA_Channel_TypeDef *get_dma_ch(uint8_t channel,
 }
 
 #if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \
-	|| defined(STM32F10X_MD_VL) || defined(STM32F10X_HD_VL)
+	|| defined(STM32F10X_HD_VL)
 
 DMA_Channel_TypeDef *get_dma2_ch(uint8_t channel,
 	void (*handler)(void *data), void *data)
@@ -130,7 +130,7 @@ DMA_Channel_TypeDef *get_dma2_ch(uint8_t channel,
 
 	RCC->AHBENR |= RCC_AHBENR_DMA2EN;
 
-	if (!channel || channel > ARRAY_SIZE(dev2_chs))
+	if (!channel || channel > sizeof(dev2_chs) / sizeof(dev2_chs[0]))
 		return 0;
 
 	channel--;

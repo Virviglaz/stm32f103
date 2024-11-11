@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -91,7 +91,7 @@ void gpio_output_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 		RCC->APB2ENR |= RCC_APB2ENR_AFIOEN;
 
 	for (i = 0; i != 16; i++)
-		if (pinmask & BIT(i))
+		if (pinmask & (1 << i))
 			set_mode(gpio, i, (uint8_t)freq, (uint8_t)mode);
 }
 
@@ -103,7 +103,7 @@ void gpio_input_init(GPIO_TypeDef *gpio, uint16_t pinmask,
 	rcc_enable(gpio);
 
 	for (i = 0; i != 16; i++) {
-		uint16_t pin_bit = BIT(i);
+		uint16_t pin_bit = 1 << i;
 		if (pinmask & pin_bit) {
 			if (mode > DIGITAL_INPUT) {
 				set_mode(gpio, i, 0, (uint8_t)PULL_UP_INPUT);
