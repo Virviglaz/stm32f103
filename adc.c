@@ -44,6 +44,7 @@
 
 #include "adc.h"
 #include <stdbool.h>
+#include <stm32f10x.h>
 #include <errno.h>
 
 struct adc_params_t {
@@ -199,52 +200,36 @@ void ADC1_2_IRQHandler(void)
 
 #ifdef FREERTOS
 
-struct param_t {
-	TaskHandle_t handle;
-	SemaphoreHandle_t mutex;
-	uint16_t value;
-};
+#include "FreeRTOS.h"
+#include "semphr.h"
 
-#if !defined (STM32F10X_LD_VL) && !defined (STM32F10X_MD_VL) && \
-	!defined (STM32F10X_HD_VL)
-static struct param_t params[2] = { 0 };
-#else
-static struct param_t params[1] = { 0 };
-#endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
+static SemaphoreHandle_t lock;
+static SemaphoreHandle_t done;
+static uint16_t result;
 
 static void rtos_handler(uint8_t adc_num, uint16_t value)
 {
-	struct param_t *par = &params[adc_num - 1];
-
-	par->value = value;
-
-	rtos_schedule_isr(par->handle);
+	(void)adc_num;
+	result = value;
+	xSemaphoreGiveFromISR(done, NULL);
 }
 
-int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel)
+uint16_t adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel)
 {
-	struct param_t *par;
+	if (!lock) { /* Race condition here when preemption is enabled. */
+		lock = xSemaphoreCreateMutex();
+		done = xSemaphoreCreateBinary();
+	}
 
-	if (!adc_num || adc_num > ARRAY_SIZE(adc_params))
-		return -EINVAL;
-
-	par = &params[adc_num - 1];
-
-	if (!par->mutex)
-		par->mutex = xSemaphoreCreateMutex();
-
-	par->handle = xTaskGetCurrentTaskHandle();
-
-	xSemaphoreTake(par->mutex, portMAX_DELAY);
+	xSemaphoreTake(lock, portMAX_DELAY);
 
 	adc_enable_interrupt(adc_num, rtos_handler);
 	adc_start(adc_num, channel, 7);
 
-	vTaskSuspend(par->handle);
+	xSemaphoreTake(done, portMAX_DELAY);
+	xSemaphoreGive(lock);
 
-	xSemaphoreGive(par->mutex);
-
-	return (int)par->value;
+	return result;
 }
 
 #endif /* FREERTOS */

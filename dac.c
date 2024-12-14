@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <stm32f10x.h>
 #include "dac.h"
 #include "dma.h"
 #include "tim.h"
@@ -129,34 +130,40 @@ void dac_enable_interrupt(void (*handler)(void *data), void *data)
 
 #ifdef FREERTOS
 
-static void handler(void *data)
+#include "FreeRTOS.h"
+#include "semphr.h"
+
+static SemaphoreHandle_t lock;
+static SemaphoreHandle_t done;
+
+static void rtos_handler(void *data)
 {
-	rtos_schedule_isr(private_data);
+	(void)data;
+	xSemaphoreGiveFromISR(done, NULL);
 }
 
 int dac_start_12bit_rtos(uint8_t ch, uint16_t *src, uint16_t size,
 	enum trig_t trig, uint32_t freq)
 {
-	static SemaphoreHandle_t mutex = 0;
-	TaskHandle_t handle;
 	int res;
 
-	if (!mutex)
-		mutex = xSemaphoreCreateMutex();
+	if (!lock) { /* Race condition here when preemption is enabled. */
+		lock = xSemaphoreCreateMutex();
+		done = xSemaphoreCreateBinary();
+	}
 
-	xSemaphoreTake(mutex, portMAX_DELAY);
+	xSemaphoreTake(lock, portMAX_DELAY);
 
-	handle = xTaskGetCurrentTaskHandle();
+	dac_enable_interrupt(rtos_handler, NULL);
 
-	dac_enable_interrupt(handler);
+	res = dac_start_12bit(ch, src, size, trig, freq);
+	if (res) {
+		xSemaphoreGive(lock);
+		return res;
+	}
 
-	res = dac_start_12bit(ch, src, sizeof, trig, freq);
-	if (!res)
-		vTaskSuspend(handle);
-
-	dac_enable_interrupt(0);
-
-	xSemaphoreGive(mutex);
+	xSemaphoreTake(done, portMAX_DELAY);
+	xSemaphoreGive(lock);
 
 	return res;
 }

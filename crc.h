@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -50,8 +50,6 @@
 #endif
 
 #include <stdint.h>
-#include <stm32f10x.h>
-#include "rtos.h"
 
 /**
   * @brief  Calculates crc32 function. Waiting call.

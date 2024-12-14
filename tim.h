@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -72,6 +72,21 @@ int timer_init(uint8_t tim, uint32_t freq, uint32_t period);
   * @retval 0 if success.
   */
 int timer_enable(uint8_t tim, bool state);
+
+/**
+ * @brief Set timer value.
+ * @param tim: Number of timer.
+ * @param value to set.
+ */
+void timer_set_value(uint8_t tim, uint32_t value);
+
+/**
+ * @brief  Get timer value.
+ * @param  tim: Number of timer.
+ *
+ * @return Timer value
+ */
+uint32_t timer_get_value(uint8_t tim);
 
 /**
   * @brief  Set timer period.

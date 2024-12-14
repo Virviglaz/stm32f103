@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <stm32f10x.h>
 #include "spi.h"
 #include "rcc.h"
 #include "dma.h"
@@ -226,6 +227,18 @@ void SPI2_IRQHandler(void)
 	spi_isr(&isrs[1]);
 }
 
+#ifdef FREERTOS
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include <string.h>
+
+static struct params {
+	SemaphoreHandle_t lock;
+	SemaphoreHandle_t done;
+} params[2];
+#endif
+
 int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high)
 {
 	SPI_TypeDef *spi;
@@ -259,12 +272,17 @@ int spi_init(uint8_t spi_num, uint32_t freq, bool clock_high)
 		NVIC_EnableIRQ(SPI2_IRQn);
 		break;
 	default:
-		return -EINVAL;
+		return EINVAL;
 	}
 
 	spi->CR2 = 0;
 	spi->CR1 = (clock_div << 3) | clock_mode | SPI_CR1_SSI | \
 		SPI_CR1_SSM | SPI_CR1_MSTR;
+
+#ifdef FREERTOS
+	params[spi_num].lock = xSemaphoreCreateMutex();
+	params[spi_num].done = xSemaphoreCreateBinary();
+#endif
 
 	return 0;
 }
@@ -318,7 +336,8 @@ int spi_read_reg(uint8_t spi_num, GPIO_TypeDef *gpio, uint16_t pin,
 
 static void handler(uint8_t spi_num, void *private_data)
 {
-	rtos_schedule_isr(private_data);
+	(void)private_data;
+	xSemaphoreGiveFromISR(params[spi_num].done, NULL);
 }
 
 static int send_message_rtos(
@@ -331,24 +350,17 @@ static int send_message_rtos(
 	uint8_t *rx_data,
 	uint16_t size)
 {
-	static SemaphoreHandle_t mutex[2] = { 0 };
-	TaskHandle_t handle;
 	int res;
 	uint8_t n = spi_num - 1;
 
-	if (!mutex[n])
-		mutex[n] = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(mutex[n], portMAX_DELAY);
-
-	handle = xTaskGetCurrentTaskHandle();
+	xSemaphoreTake(params[n].lock, portMAX_DELAY);
 
 	res = send_message(spi_num, gpio, pin, reg, reg_size,
-		tx_data, rx_data, size, handler, handle);
+		tx_data, rx_data, size, handler, &params[n]);
 	if (!res)
-		vTaskSuspend(handle);
+		xSemaphoreTake(params[n].done, portMAX_DELAY);
 
-	xSemaphoreGive(mutex[n]);
+	xSemaphoreGive(params[n].lock);
 
 	return res;
 }

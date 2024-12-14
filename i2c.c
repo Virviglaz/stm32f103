@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <stm32f10x.h>
 #include "i2c.h"
 #include "gpio.h"
 #include "rcc.h"
@@ -323,6 +324,19 @@ void I2C2_ER_IRQHandler(void)
 	isr_err_handler(I2C2, 1);
 }
 
+#ifdef FREERTOS
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include <string.h>
+
+static struct params {
+	SemaphoreHandle_t lock;
+	SemaphoreHandle_t done;
+	uint8_t result;
+} params[2];
+#endif
+
 int i2c_init(uint8_t i2c_num, bool fast_mode)
 {
 	I2C_TypeDef *i2c;
@@ -348,6 +362,8 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 		NVIC_EnableIRQ(I2C2_EV_IRQn);
 		NVIC_EnableIRQ(I2C2_ER_IRQn);
 		break;
+	default:
+		return EINVAL;
 	}
 
 	i2c = i2c_s[i2c_num];
@@ -373,6 +389,11 @@ int i2c_init(uint8_t i2c_num, bool fast_mode)
 
 	isr->task = DONE;
 	isr->i2c = i2c;
+
+#ifdef FREERTOS
+	params[i2c_num].lock = xSemaphoreCreateMutex();
+	params[i2c_num].done = xSemaphoreCreateBinary();
+#endif
 
 	return 0;
 }
@@ -439,18 +460,13 @@ int i2c_set_handler(uint8_t i2c_num, void (*handler)(void *data, uint8_t err),
 
 #ifdef FREERTOS
 
-struct rtos_task_t {
-	void *task_handle;
-	uint8_t err;
-};
-
-static void rtos_handler(void *task, uint8_t err)
+static void rtos_handler(void *args, uint8_t err)
 {
-	struct rtos_task_t *param = task;
+	struct params *par = args;
 
-	param->err = err;
+	par->result = err;
 
-	rtos_schedule_isr(param->task_handle);
+	xSemaphoreGiveFromISR(par->done, NULL);
 }
 
 /*
@@ -463,28 +479,18 @@ static int rw_reg8_rtos(uint8_t i2c_num, uint8_t addr, uint8_t *reg,
 	uint8_t reg_size, uint8_t *data, uint16_t size, enum dir_t dir)
 {
 	int res;
-	struct rtos_task_t params;
-	static SemaphoreHandle_t mutex[2] = { 0 };
 
-	if (!mutex[i2c_num - 1])
-		mutex[i2c_num - 1] = xSemaphoreCreateMutex();
+	xSemaphoreTake(params[i2c_num - 1].lock, portMAX_DELAY);
 
-	xSemaphoreTake(mutex[i2c_num - 1], portMAX_DELAY);
-
-	params.task_handle = xTaskGetCurrentTaskHandle();
-
-	i2c_set_handler(i2c_num, rtos_handler, &params);
+	i2c_set_handler(i2c_num, rtos_handler, &params[i2c_num - 1]);
 
 	res = send_message(i2c_num, addr, reg, reg_size, data, size, dir);
 	if (!res)
-		vTaskSuspend(params.task_handle);
+		xSemaphoreTake(params[i2c_num - 1].done, portMAX_DELAY);
 
-	xSemaphoreGive(mutex[i2c_num - 1]);
+	xSemaphoreGive(params[i2c_num - 1].lock);
 
-	if (res)
-		return res;
-
-	return -params.err;
+	return res ? res : params[i2c_num - 1].result;
 }
 
 int i2c_write_reg_rtos(uint8_t i2c_num, uint8_t addr, uint8_t reg,

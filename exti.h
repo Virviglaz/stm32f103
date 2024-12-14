@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,7 +52,6 @@
 #include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "rtos.h"
 
 /**
   * @brief  Initialize EXTI and install the interrupt handler.
@@ -86,11 +85,12 @@ int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin);
   * @param  pin: Pin number for pin change interrupt.
   * @param  rising: Enable rising edge detection.
   * @param  falling: Enable falling edge detection.
+  * @param  waiter: Binary SemaphoreHandle_t to be used for a waiting state.
   *
   * @retval 0 if success.
   */
 int wait_for_pinchange_rtos(GPIO_TypeDef *gpio, uint16_t pin,
-	bool rising, bool falling);
+	bool rising, bool falling, void *waiter);
 
 #endif /* FREERTOS */
 

@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <stm32f10x.h>
 #include "uart.h"
 #include "gpio.h"
 #include "rcc.h"
@@ -112,6 +113,16 @@ static void tx_dma_handler(void *data)
 	tx->uart->CR1 |= USART_CR1_TXEIE;
 }
 
+#ifdef FREERTOS
+
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include <string.h>
+
+static SemaphoreHandle_t lock[3];
+static SemaphoreHandle_t done[3];
+#endif
+
 void uart_init(uint8_t uart_num, uint32_t freq)
 {
 	USART_TypeDef *uart = uarts[uart_num - 1];
@@ -140,12 +151,19 @@ void uart_init(uint8_t uart_num, uint32_t freq)
 		gpio_input_init(PB11, PULL_UP_INPUT);
 		NVIC_EnableIRQ(USART3_IRQn);
 		break;
+	default:
+		return;
 	}
 
 	uart->BRR = UART_BRR_SAMPLING8(clock_source, freq << 1);
 	uart->CR1 = USART_CR1_UE | USART_CR1_TE;
 	uart->CR2 = 0;
 	uart->CR3 = USART_CR3_DMAT;
+
+#ifdef FREERTOS
+	lock[uart_num - 1] = xSemaphoreCreateMutex();
+	done[uart_num - 1] = xSemaphoreCreateBinary();
+#endif
 }
 
 void uart_write(uint8_t uart_num, char ch)
@@ -276,38 +294,28 @@ void USART3_IRQHandler(void)
 
 #ifdef FREERTOS
 
-static SemaphoreHandle_t tx_mutex[3] = { 0 };
-static SemaphoreHandle_t rx_mutex[3] = { 0 };
-static uint16_t bytes_received[3];
-
 static void rtos_tx_handler(void *private_data)
 {
-	rtos_schedule_isr(private_data);
+	xSemaphoreGiveFromISR(private_data, NULL);
 }
 
+static uint16_t bytes_received[3];
 static void rtos_rx_handler(uint8_t uart_num, char *data, uint16_t size,
 	void *private_data)
 {
 	bytes_received[uart_num - 1] = size;
 
-	rtos_schedule_isr(private_data);
+	xSemaphoreGiveFromISR((SemaphoreHandle_t)private_data, NULL);
 }
 
 void uart_send_data_rtos(uint8_t uart_num, char *buf, uint16_t size)
 {
-	TaskHandle_t handle;
+	xSemaphoreTake(lock[uart_num - 1], portMAX_DELAY);
 
-	if (!tx_mutex[uart_num - 1])
-		tx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
+	if (!uart_send_data(uart_num, buf, size, rtos_tx_handler, done[uart_num - 1]))
+		xSemaphoreTake(done[uart_num - 1], portMAX_DELAY);
 
-	handle = xTaskGetCurrentTaskHandle();
-
-	xSemaphoreTake(tx_mutex[uart_num - 1], portMAX_DELAY);
-
-	if (!uart_send_data(uart_num, buf, size, rtos_tx_handler, handle))
-		vTaskSuspend(handle);
-
-	xSemaphoreGive(tx_mutex[uart_num - 1]);
+	xSemaphoreGive(lock[uart_num - 1]);
 }
 
 void uart_send_string_rtos(uint8_t uart_num, char *string)
@@ -317,20 +325,12 @@ void uart_send_string_rtos(uint8_t uart_num, char *string)
 
 uint16_t uart_receive_rtos(uint8_t uart_num, char *buf, uint16_t size)
 {
-	TaskHandle_t handle;
+	xSemaphoreTake(lock[uart_num - 1], portMAX_DELAY);
 
-	if (!rx_mutex[uart_num - 1])
-		rx_mutex[uart_num - 1] = xSemaphoreCreateMutex();
+	uart_enable_rx_buffer(uart_num, buf, size, rtos_rx_handler, done[uart_num - 1]);
 
-	xSemaphoreTake(rx_mutex[uart_num - 1], portMAX_DELAY);
-
-	handle = xTaskGetCurrentTaskHandle();
-
-	uart_enable_rx_buffer(uart_num, buf, size, rtos_rx_handler, handle);
-
-	vTaskSuspend(handle);
-
-	xSemaphoreGive(rx_mutex[uart_num - 1]);
+	xSemaphoreTake(done[uart_num - 1], portMAX_DELAY);
+	xSemaphoreGive(lock[uart_num - 1]);
 
 	return bytes_received[uart_num - 1];
 }

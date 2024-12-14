@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -197,6 +197,26 @@ int timer_enable(uint8_t tim, bool state)
 	base->CR1 = state ? TIM_CR1_CEN : 0;
 
 	return 0;
+}
+
+void timer_set_value(uint8_t tim, uint32_t value)
+{
+	TIM_TypeDef *base = get_tim_base(tim);
+
+	if (!base)
+		return;
+
+	base->CNT = value;
+}
+
+uint32_t timer_get_value(uint8_t tim)
+{
+	TIM_TypeDef *base = get_tim_base(tim);
+
+	if (!base)
+		return 0;
+
+	return base->CNT;
 }
 
 int timer_set_period(uint8_t tim, uint16_t period)

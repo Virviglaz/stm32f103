@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -49,10 +49,8 @@
  extern "C" {
 #endif
 
-#include <stm32f10x.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "rtos.h"
 
 #if !defined(STM32F10X_HD) && !defined(STM32F10X_CL) && \
 	!defined(STM32F10X_LD_VL) && !defined(STM32F10X_MD_VL) && \

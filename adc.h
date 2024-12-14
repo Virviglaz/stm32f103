@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -49,9 +49,7 @@
  extern "C" {
 #endif
 
-#include <stm32f10x.h>
 #include <stdint.h>
-#include "rtos.h"
 
 /**
   * @brief  Init ADC and start the conversion.
@@ -99,9 +97,9 @@ void adc_enable_interrupt(uint8_t adc_num,
   * @param  adc_num: 1 or 2 which ADC to use.
   * @param  channel: Channel number 0..16.
   *
-  * @retval 12 bit raw adc value or negative error value.
+  * @retval 12 bit raw adc value.
   */
-int adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel);
+uint16_t adc_single_conversion_rtos(uint8_t adc_num, uint8_t channel);
 
 #endif /* FREERTOS */
 

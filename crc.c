@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <stm32f10x.h>
 #include "crc.h"
 #include "dma.h"
 #include <stdbool.h>
@@ -104,44 +105,36 @@ uint32_t crc32dma8(uint8_t *buf, uint16_t size,
 
 #ifdef FREERTOS
 
-struct param_t {
-	TaskHandle_t handle;
-	uint32_t crc32;
-};
+#include "FreeRTOS.h"
+#include "semphr.h"
+
+static SemaphoreHandle_t lock;
+static SemaphoreHandle_t done;
+static uint32_t result;
 
 static void rtos_handler(void *data, uint32_t res)
 {
-	struct param_t *param = data;
-
-	param->crc32 = res;
-
-	rtos_schedule_isr(param->handle);
+	(void)data;
+	result = res;
+	xSemaphoreGiveFromISR(done, NULL);
 }
 
 uint32_t crc32rtos(uint8_t *buf, uint16_t size)
 {
-	static SemaphoreHandle_t mutex = 0;
-	uint32_t ret;
-	struct param_t *param = malloc(sizeof(*param));
+	if (!lock) { /* Race condition here when preemption is enabled. */
+		lock = xSemaphoreCreateMutex();
+		done = xSemaphoreCreateBinary();
+	}
 
-	if (!mutex)
-		mutex = xSemaphoreCreateMutex();
+	xSemaphoreTake(lock, portMAX_DELAY);
 
-	param->handle = xTaskGetCurrentTaskHandle();
+	crc32dma8(buf, size, rtos_handler, NULL);
 
-	xSemaphoreTake(mutex, portMAX_DELAY);
+	xSemaphoreTake(done, portMAX_DELAY);
 
-	crc32dma8(buf, size, rtos_handler, param);
+	xSemaphoreGive(lock);
 
-	vTaskSuspend(param->handle);
-
-	ret = param->crc32;
-
-	free(param);
-
-	xSemaphoreGive(mutex);
-
-	return ret;
+	return result;
 }
 
 #endif /* FREERTOS */

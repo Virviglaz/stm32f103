@@ -43,7 +43,6 @@
  */
 
 #include "dma.h"
-#include <string.h>
 
 #if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \
 	|| defined(STM32F10X_MD_VL) || defined(STM32F10X_HD_VL)
@@ -142,7 +141,7 @@ DMA_Channel_TypeDef *get_dma2_ch(uint8_t channel,
 
 	NVIC_EnableIRQ((enum IRQn)(DMA2_Channel1_IRQn + channel));
 
-	channel += NOF_DMA_CHANNELS - ARRAY_SIZE(dev2_chs);
+	channel += NOF_DMA_CHANNELS - sizeof(dev2_chs) / sizeof(dev2_chs[0]);
 
 	/* assign handler */
 	isrs[channel].handler = handler;
@@ -259,25 +258,31 @@ static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
 
 #else /* FREERTOS */
 
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include <string.h>
+
+static SemaphoreHandle_t lock;
+static SemaphoreHandle_t done;
+
 static void handler(void *data)
 {
-	rtos_schedule_isr(data);
+	(void)data;
+	xSemaphoreGiveFromISR(done, NULL);
 }
 
 static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
 {
-	static SemaphoreHandle_t mutex = 0;
 	DMA_Channel_TypeDef *ch;
-	TaskHandle_t handle;
 
-	if (!mutex)
-		mutex = xSemaphoreCreateMutex();
+	if (!lock) { /* Race condition here when preemption is enabled. */
+		lock = xSemaphoreCreateMutex();
+		done = xSemaphoreCreateBinary();
+	}
 
-	xSemaphoreTake(mutex, portMAX_DELAY);
+	xSemaphoreTake(lock, portMAX_DELAY);
 
-	handle = xTaskGetCurrentTaskHandle();
-
-	ch = get_dma_ch(0, handler, handle);
+	ch = get_dma_ch(0, handler, NULL);
 
 	if (!ch) /* failed to get channel, use cpu instead */
 		memcpy(dst, src, size);
@@ -287,11 +292,11 @@ static void memcpy_dma(void *dst, const void *src, uint16_t size, uint16_t flag)
 		ch->CPAR = (uint32_t)dst;
 		ch->CCR = DMA_CCR1_MEM2MEM | DMA_CCR1_MINC | DMA_CCR1_PINC | \
 			DMA_CCR1_DIR | DMA_CCR1_TCIE | DMA_CCR1_EN | flag;
-		vTaskSuspend(handle);
+		xSemaphoreTake(done, portMAX_DELAY);
 		dma_release(ch);
 	}
 
-	xSemaphoreGive(mutex);
+	xSemaphoreGive(lock);
 }
 
 #endif /* FREERTOS */

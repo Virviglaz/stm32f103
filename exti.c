@@ -4,7 +4,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Pavel Nadein
+ * Copyright (c) 2020-2024 Pavel Nadein
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -165,33 +165,26 @@ int remove_pinchange_interrupt(GPIO_TypeDef *gpio, uint16_t pin)
 
 #ifdef FREERTOS
 
+#include "FreeRTOS.h"
+#include "semphr.h"
+#include <string.h>
+
 static void rtos_handler(void *data)
 {
-	rtos_schedule_isr(data);
+	xSemaphoreGiveFromISR(data, NULL);
 }
 
 int wait_for_pinchange_rtos(GPIO_TypeDef *gpio, uint16_t pin,
-	bool rising, bool falling)
+	bool rising, bool falling, void *waiter)
 {
-	static SemaphoreHandle_t mutex = 0;
 	int ret;
-	TaskHandle_t handle;
 
-	if (!mutex)
-		mutex = xSemaphoreCreateMutex();
-
-	xSemaphoreTake(mutex, portMAX_DELAY);
-
-	handle = xTaskGetCurrentTaskHandle();
-
-	ret = add_pinchange_interrupt(gpio, pin, rtos_handler, handle,
+	ret = add_pinchange_interrupt(gpio, pin, rtos_handler, waiter,
 		rising, falling);
 	if (!ret)
-		vTaskSuspend(handle);
+		xSemaphoreTake(waiter, portMAX_DELAY);
 
 	remove_pinchange_interrupt(gpio, pin);
-
-	xSemaphoreGive(mutex);
 
 	return ret;
 }
