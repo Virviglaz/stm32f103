@@ -42,6 +42,7 @@
  * Pavel Nadein <pavelnadein@gmail.com>
  */
 
+#include <string.h>
 #include "dma.h"
 
 #if defined(STM32F10X_HD) || defined(STM32F10X_CL) || defined(STM32F10X_LD_VL) \

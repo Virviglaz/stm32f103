@@ -198,6 +198,47 @@ void ADC1_2_IRQHandler(void)
 }
 #endif /* STM32F10X_LD_VL STM32F10X_MD_VL STM32F10X_HD_VL */
 
+uint32_t get_random_u32(uint8_t adc_num, uint8_t channel)
+{
+	uint32_t res = 0;
+	for (int i = 0; i != 32; i++) {
+#ifdef FREERTOS
+		res |= (adc_single_conversion_rtos(adc_num, channel) & 1) << i;
+#else
+		res |= (adc_single_conversion(adc_num, channel, 0) & 1) << i;
+#endif
+	}
+
+	return res;
+}
+
+float get_random_float(uint8_t adc_num, uint8_t channel)
+{
+	union {
+		uint32_t u32;
+		float flt_val;
+		struct {
+			uint32_t frac : 23;
+			uint32_t expn : 8;
+			uint32_t sign : 1;
+		} flt;
+	} val;
+	val.u32 = 0;
+	val.flt.expn = 127;
+
+	for (int i = 0; i != 23; i++) {
+#ifdef FREERTOS
+		val.flt.frac |=
+					(adc_single_conversion_rtos(adc_num, channel) & 1) << i;
+#else
+		val.flt.frac |=
+					(adc_single_conversion(adc_num, channel, 0) & 1) << i;
+#endif
+	}
+
+	return val.flt_val - 1;
+}
+
 #ifdef FREERTOS
 
 #include "FreeRTOS.h"

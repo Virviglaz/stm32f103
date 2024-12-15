@@ -90,6 +90,25 @@ int adc_single_conversion(uint8_t adc_num, uint8_t channel,
 void adc_enable_interrupt(uint8_t adc_num,
 	void (*handler)(uint8_t adc_num, uint16_t value));
 
+
+/**
+  * @brief  Generate random 32-bit value based on ADC noise.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  channel: Channel number 0..16.
+  *
+  * @retval 32-bit random value.
+  */
+uint32_t get_random_u32(uint8_t adc_num, uint8_t channel);
+
+/**
+  * @brief  Generate random float value based on ADC noise.
+  * @param  adc_num: 1 or 2 which ADC to use.
+  * @param  channel: Channel number 0..16.
+  *
+  * @retval Float random value from 0 to 1.
+  */
+float get_random_float(uint8_t adc_num, uint8_t channel);
+
 #ifdef FREERTOS
 
 /**
